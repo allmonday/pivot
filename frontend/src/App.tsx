@@ -37,7 +37,7 @@ export default function App() {
     setParamsInUrl(selectedFolder?.id ?? null, task.id);
     setWorking(false);
     setSelectedTask(task);
-    setPlanVisible(!!task.plan_path);
+    setPlanVisible(task.plan_paths.length > 0);
     const [existing, history] = await Promise.all([
       fetchSession(task.id).catch(() => null),
       fetchMessages(task.id).catch(() => []),
@@ -63,7 +63,7 @@ export default function App() {
       if (selectedTask) {
         fetchTasks().then((tasks) => {
           const updated = tasks.find((t) => t.id === selectedTask.id);
-          if (updated && updated.plan_path && !selectedTask.plan_path) {
+          if (updated && updated.plan_paths.length > selectedTask.plan_paths.length) {
             setSelectedTask(updated);
             setPlanVisible(true);
           }
@@ -90,7 +90,7 @@ export default function App() {
             if (folder) setSelectedFolder(folder);
           }
           setSelectedTask(task);
-          setPlanVisible(!!task.plan_path);
+          setPlanVisible(task.plan_paths.length > 0);
           Promise.all([
             fetchSession(task.id).catch(() => null),
             fetchMessages(task.id).catch(() => []),
@@ -150,7 +150,7 @@ export default function App() {
                 onStreamingChange={handleStreamingDone}
                 planVisible={planVisible}
                 onTogglePlan={() => setPlanVisible(!planVisible)}
-                hasPlan={!!selectedTask.plan_path}
+                hasPlan={selectedTask.plan_paths.length > 0}
               />
             </div>
             {planVisible && (
@@ -182,7 +182,7 @@ export default function App() {
               />
             )}
             <PlanPanel
-              planPath={selectedTask.plan_path}
+              planPaths={selectedTask.plan_paths}
               folderPath={selectedFolder?.folder_path ?? null}
               visible={planVisible}
               onClose={() => setPlanVisible(false)}

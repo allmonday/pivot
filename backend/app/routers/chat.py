@@ -1,15 +1,14 @@
 import asyncio
 import json
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import async_session, get_db
-from ..schemas.models import ChatRequest
+from ..schemas.models import ChatRequest, PermissionDecision
 from ..services import claude_service
-from ..services.stream_cache import stream_cache
+from ..services.client_manager import client_manager
 
 router = APIRouter(prefix="/api")
 
@@ -28,56 +27,52 @@ async def get_messages(task_id: str, db: AsyncSession = Depends(get_db)):
 @router.post("/chat")
 async def chat(req: ChatRequest):
     # 拒绝同一 task 重复提交
-    active = stream_cache.get_active_stream_for_task(req.task_id)
-    if active:
+    if client_manager.is_active(req.task_id):
         raise HTTPException(status_code=409, detail="A stream is already active for this task")
 
-    stream_id = uuid.uuid4().hex
-    await stream_cache.start(stream_id, req.task_id)
+    folder_path = await _get_folder_path(req.task_id)
+    if not folder_path:
+        raise HTTPException(status_code=404, detail=f"Task {req.task_id} not found")
 
-    # 后台任务：执行 query 并将事件写入 StreamCache
+    # 确保 client 存在
+    await client_manager.get_or_create(req.task_id, folder_path)
+
+    # 后台任务：执行 query 并将事件写入 client_manager
     async def _run():
         try:
             async with async_session() as db:
-                async for message in claude_service.stream_query(
-                    db=db,
-                    prompt=req.message,
+                await client_manager.send_query(
                     task_id=req.task_id,
-                    session_id=req.session_id,
+                    prompt=req.message,
                     mode=req.mode,
-                ):
-                    event_type = message.get("type", "unknown")
-                    stream_cache.append(stream_id, event_type, message)
+                    db=db,
+                )
         except Exception as e:
-            stream_cache.append(stream_id, "error", {"type": "error", "message": str(e)})
-        finally:
-            stream_cache.end(stream_id)
-            # 延迟 60s 清理缓存
-            await asyncio.sleep(60)
-            stream_cache.cleanup(stream_id)
+            # send_query 内部已经处理了异常推送，这里做兜底
+            pass
 
     asyncio.create_task(_run())
 
-    return {"stream_id": stream_id}
+    return {"task_id": req.task_id}
 
 
-@router.get("/stream/{stream_id}")
-async def stream_sse(stream_id: str):
-    if not stream_cache.has_stream(stream_id):
-        raise HTTPException(status_code=404, detail="Stream not found")
+@router.get("/stream/{task_id}")
+async def stream_sse(task_id: str):
+    if not client_manager.is_active(task_id) and not client_manager.get_cached_events(task_id):
+        raise HTTPException(status_code=404, detail="No active stream for this task")
 
     async def event_generator():
-        # 1. 先订阅，防止回放期间新事件丢失
-        q = await stream_cache.subscribe(stream_id)
+        q = client_manager.subscribe(task_id)
         try:
-            cached = stream_cache.get_cached_events(stream_id)
+            # 1. 回放缓存事件
+            cached = client_manager.get_cached_events(task_id)
             last_seq = len(cached) - 1 if cached else -1
 
             for entry in cached:
                 yield f"event: {entry['event']}\ndata: {json.dumps(entry['data'])}\n\n"
 
             # 如果已经结束，直接关闭
-            if not stream_cache.is_active(stream_id):
+            if not client_manager.is_active(task_id):
                 return
 
             # 2. 从队列读取新事件，跳过已回放的
@@ -89,7 +84,7 @@ async def stream_sse(stream_id: str):
                     continue
                 yield f"event: {entry['event']}\ndata: {json.dumps(entry['data'])}\n\n"
         finally:
-            stream_cache.unsubscribe(stream_id, q)
+            client_manager.unsubscribe(task_id, q)
 
     return StreamingResponse(
         event_generator(),
@@ -104,5 +99,25 @@ async def stream_sse(stream_id: str):
 
 @router.get("/active-stream/{task_id}")
 async def active_stream(task_id: str):
-    stream_id = stream_cache.get_active_stream_for_task(task_id)
-    return {"active": stream_id is not None, "stream_id": stream_id}
+    return {"active": client_manager.is_active(task_id)}
+
+
+@router.post("/interrupt/{task_id}")
+async def interrupt(task_id: str):
+    if not client_manager.is_active(task_id):
+        raise HTTPException(status_code=404, detail="No active stream for this task")
+    await client_manager.interrupt(task_id)
+    return {"status": "interrupted"}
+
+
+@router.post("/permission/{task_id}/{request_id}")
+async def resolve_permission(task_id: str, request_id: str, body: PermissionDecision):
+    ok = client_manager.resolve_permission(task_id, request_id, body.decision, body.message)
+    if not ok:
+        raise HTTPException(status_code=404, detail="No pending permission request found")
+    return {"status": "ok"}
+
+
+async def _get_folder_path(task_id: str) -> str | None:
+    async with async_session() as db:
+        return await claude_service.get_task_folder_path(db, task_id)

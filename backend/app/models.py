@@ -27,7 +27,7 @@ class TaskORM(Base):
         String, ForeignKey("folders.id", ondelete="CASCADE"), nullable=False
     )
 
-    plan_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    plan_paths: Mapped[str | None] = mapped_column(String, nullable=True)  # JSON list
 
     folder: Mapped["FolderORM"] = relationship("FolderORM", back_populates="tasks")
     session: Mapped["SessionORM | None"] = relationship(

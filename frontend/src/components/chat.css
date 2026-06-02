@@ -89,8 +89,8 @@
   border-top: none;
 }
 
-.chat-message--user {
-  flex-direction: row-reverse;
+.chat-message--user .chat-bubble-user {
+  background: #e3f2fd;
 }
 
 /* Streaming message should NOT re-trigger animation */
@@ -528,4 +528,105 @@
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: #aaa;
+}
+
+/* ---------- Result Info Bar ---------- */
+.result-info-bar {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  margin-top: 4px;
+  background: #f9fafb;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.result-info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Permission Banner ---------- */
+.permission-banner {
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+}
+
+.permission-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.permission-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.permission-banner-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.permission-banner-path {
+  margin-top: 4px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.permission-banner-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.permission-allow-btn {
+  padding: 6px 16px;
+  border: 1px solid #10b981;
+  border-radius: 6px;
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.permission-allow-btn:hover {
+  background: #a7f3d0;
+}
+
+.permission-deny-btn {
+  padding: 6px 16px;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.permission-deny-btn:hover {
+  background: #fecaca;
 }

@@ -160,12 +160,12 @@ function parseSSEPart(part: string): { eventType: string; data: Record<string, u
   return null;
 }
 
-// Chat streaming (two-step: POST to start, GET to consume SSE)
+// Chat streaming (POST to start, then GET SSE by task_id)
 
 export function sendChat(
   taskId: string,
   message: string,
-  sessionId: string | null,
+  _sessionId: string | null,
   mode: string = "code",
   onEvent: (eventType: string, data: Record<string, unknown>) => void,
   onError: (err: Error) => void,
@@ -174,7 +174,6 @@ export function sendChat(
   const controller = new AbortController();
   let sseController: AbortController | null = null;
 
-  // 当外层 abort 时，同时中断 SSE 流
   controller.signal.addEventListener("abort", () => sseController?.abort());
 
   fetch(`${BASE}/chat`, {
@@ -183,7 +182,6 @@ export function sendChat(
     body: JSON.stringify({
       task_id: taskId,
       message,
-      session_id: sessionId,
       mode,
     }),
     signal: controller.signal,
@@ -198,9 +196,8 @@ export function sendChat(
         }
         return;
       }
-      const { stream_id } = await res.json();
-      // 第二步：连接 SSE 流
-      sseController = consumeSSE(`${BASE}/stream/${stream_id}`, onEvent, onError, onDone);
+      // 连接 SSE 流，直接用 task_id
+      sseController = consumeSSE(`${BASE}/stream/${taskId}`, onEvent, onError, onDone);
     })
     .catch((err) => {
       if (err.name !== "AbortError") onError(err);
@@ -209,19 +206,42 @@ export function sendChat(
   return controller;
 }
 
-// 重连已有的 stream
+// 重连已有的 stream（按 task_id）
 export function reconnectStream(
-  streamId: string,
+  taskId: string,
   onEvent: (eventType: string, data: Record<string, unknown>) => void,
   onError: (err: Error) => void,
   onDone: () => void
 ): AbortController {
-  return consumeSSE(`${BASE}/stream/${streamId}`, onEvent, onError, onDone);
+  return consumeSSE(`${BASE}/stream/${taskId}`, onEvent, onError, onDone);
 }
 
 // 检查活跃 stream
-export async function checkActiveStream(taskId: string): Promise<{ active: boolean; stream_id: string | null }> {
+export async function checkActiveStream(taskId: string): Promise<{ active: boolean }> {
   const res = await fetch(`${BASE}/active-stream/${taskId}`);
-  if (!res.ok) return { active: false, stream_id: null };
+  if (!res.ok) return { active: false };
   return res.json();
+}
+
+// 中断活跃 stream
+export async function interruptStream(taskId: string): Promise<void> {
+  await fetch(`${BASE}/interrupt/${taskId}`, { method: "POST" });
+}
+
+// 权限审批
+export async function resolvePermission(
+  taskId: string,
+  requestId: string,
+  decision: "allow" | "deny",
+  message: string = ""
+): Promise<void> {
+  const res = await fetch(
+    `${BASE}/permission/${taskId}/${requestId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision, message }),
+    }
+  );
+  if (!res.ok) throw new Error(await res.text());
 }

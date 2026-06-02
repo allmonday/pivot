@@ -1,4 +1,6 @@
-from typing import Any, AsyncIterator, Optional
+import json
+from pathlib import Path
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,35 +8,16 @@ from sqlalchemy.orm import selectinload
 
 from claude_agent_sdk import (
     AssistantMessage,
-    ClaudeAgentOptions,
-    ClaudeSDKError,
     ResultMessage,
     TextBlock,
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
-    create_sdk_mcp_server,
     get_session_messages,
-    query,
-    tool,
 )
 
 from ..models import FolderORM, SessionORM, TaskORM
 from ..schemas.models import Task
-
-
-# --- In-process MCP tool for structured user choices ---
-
-@tool(
-    "present_options",
-    "Present choices for user to select. Use this when you need the user to pick from multiple options.",
-    {"question": str, "options": list[str]},
-)
-async def _present_options(args: dict) -> dict:
-    return {"content": [{"type": "text", "text": "Options presented. Awaiting user response."}]}
-
-
-_ui_mcp = create_sdk_mcp_server("ui_tools", tools=[_present_options])
 
 
 def _serialize_block(block: Any) -> dict:
@@ -70,6 +53,10 @@ def _serialize_message(msg: Any) -> dict | None:
             "session_id": msg.session_id,
             "is_error": msg.is_error,
             "total_cost_usd": msg.total_cost_usd,
+            "duration_ms": msg.duration_ms,
+            "duration_api_ms": msg.duration_api_ms,
+            "num_turns": msg.num_turns,
+            "usage": msg.usage,
         }
     return None
 
@@ -107,7 +94,8 @@ async def get_task(db: AsyncSession, task_id: str) -> Optional[Task]:
     )
     task = result.scalar_one_or_none()
     if task:
-        return Task(id=task.id, name=task.name, folder_id=task.folder_id, plan_path=task.plan_path)
+        plan_paths = json.loads(task.plan_paths or "[]")
+        return Task(id=task.id, name=task.name, folder_id=task.folder_id, plan_paths=plan_paths)
     return None
 
 
@@ -176,13 +164,8 @@ async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
     return result
 
 
-def _detect_latest_plan(folder_path: str) -> str | None:
-    """Scan .claude/plans/ for the latest .md file.
-
-    Checks both project-local and home directory locations.
-    """
-    from pathlib import Path
-
+def _detect_new_plans(folder_path: str, existing_paths: list[str]) -> list[str]:
+    """Scan .claude/plans/ for .md files not yet in existing_paths."""
     candidates = [
         Path(folder_path) / ".claude" / "plans",
         Path.home() / ".claude" / "plans",
@@ -191,69 +174,8 @@ def _detect_latest_plan(folder_path: str) -> str | None:
     for plans_dir in candidates:
         if plans_dir.is_dir():
             all_files.extend(plans_dir.glob("*.md"))
-    if not all_files:
-        return None
-    latest = sorted(all_files, key=lambda p: p.stat().st_mtime, reverse=True)[0]
-    return str(latest)
+    existing_set = set(existing_paths)
+    new_files = [str(f) for f in all_files if str(f) not in existing_set]
+    return sorted(new_files, key=lambda p: Path(p).stat().st_mtime)
 
 
-async def stream_query(
-    db: AsyncSession,
-    prompt: str,
-    task_id: str,
-    session_id: Optional[str] = None,
-    mode: str = "code",
-) -> AsyncIterator[dict]:
-    task = await get_task(db, task_id)
-    folder_path = await get_task_folder_path(db, task_id)
-    if not task or not folder_path:
-        yield {"type": "error", "message": f"Task {task_id} not found"}
-        return
-
-    options = ClaudeAgentOptions(
-        cwd=folder_path,
-        allowed_tools=["Read", "Glob", "Grep", "Bash", "Write", "Edit", "MultiEdit", "present_options"],
-        mcp_servers={"ui_tools": _ui_mcp},
-        system_prompt={
-            "type": "preset",
-            "preset": "claude_code",
-            "append": (
-                "When you need the user to choose between multiple options or approaches, "
-                "call the present_options tool with the question and option list. "
-                "After calling this tool, briefly summarize and wait for the user's choice."
-            ),
-        },
-    )
-    if session_id:
-        options.resume = session_id
-
-    try:
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, ResultMessage) and message.session_id:
-                result = await db.execute(
-                    select(SessionORM).where(SessionORM.task_id == task_id)
-                )
-                existing = result.scalar_one_or_none()
-                if existing:
-                    existing.session_id = message.session_id
-                else:
-                    db.add(SessionORM(task_id=task_id, session_id=message.session_id))
-                await db.commit()
-
-            serialized = _serialize_message(message)
-            if serialized is not None:
-                yield serialized
-
-            # On final result, detect plan file in plan mode
-            if isinstance(message, ResultMessage) and mode == "plan":
-                plan_path = _detect_latest_plan(folder_path)
-                if plan_path:
-                    result = await db.execute(select(TaskORM).where(TaskORM.id == task_id))
-                    task_orm = result.scalar_one_or_none()
-                    if task_orm:
-                        task_orm.plan_path = plan_path
-                        await db.commit()
-                    yield {"type": "plan_updated", "plan_path": plan_path}
-
-    except ClaudeSDKError as e:
-        yield {"type": "error", "message": str(e)}

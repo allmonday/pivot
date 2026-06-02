@@ -14,7 +14,7 @@ export interface Task {
   id: string;
   name: string;
   folder_id: string;
-  plan_path: string | null;
+  plan_paths: string[];
 }
 
 export interface TaskCreate {
@@ -50,4 +50,19 @@ export interface PlanFile {
   name: string;
   path: string;
   modified_at: string;
+}
+
+export interface ResultInfo {
+  total_cost_usd: number | null;
+  duration_ms: number | null;
+  duration_api_ms: number | null;
+  num_turns: number | null;
+}
+
+export interface PermissionRequest {
+  request_id: string;
+  tool_name: string;
+  title: string | null;
+  description: string | null;
+  blocked_path: string | null;
 }

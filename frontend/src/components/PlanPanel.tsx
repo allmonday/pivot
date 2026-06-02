@@ -3,11 +3,10 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
-import type { PlanFile } from "../types";
-import { fetchFileContent, fetchPlanFiles } from "../api";
+import { fetchFileContent } from "../api";
 
 interface Props {
-  planPath: string | null;
+  planPaths: string[];
   folderPath: string | null;
   visible: boolean;
   onClose: () => void;
@@ -43,13 +42,17 @@ function extractText(node: React.ReactNode): string {
   return "";
 }
 
-export function PlanPanel({ planPath, folderPath, visible, onClose, refreshKey, width }: Props) {
+function pathToName(path: string): string {
+  return path.split("/").pop() || path;
+}
+
+export function PlanPanel({ planPaths, folderPath, visible, onClose, refreshKey, width }: Props) {
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [planFiles, setPlanFiles] = useState<PlanFile[]>([]);
-  const [currentPath, setCurrentPath] = useState<string | null>(planPath);
-  const [showHistory, setShowHistory] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const currentPath = planPaths[selectedIndex] ?? null;
 
   const loadContent = async (path: string) => {
     setLoading(true);
@@ -57,7 +60,6 @@ export function PlanPanel({ planPath, folderPath, visible, onClose, refreshKey, 
     try {
       const text = await fetchFileContent(path);
       setContent(text);
-      setCurrentPath(path);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load plan");
     } finally {
@@ -65,22 +67,18 @@ export function PlanPanel({ planPath, folderPath, visible, onClose, refreshKey, 
     }
   };
 
-  const loadHistory = async () => {
-    if (!folderPath) return;
-    try {
-      const files = await fetchPlanFiles(folderPath);
-      setPlanFiles(files);
-    } catch {
-      // ignore
-    }
-  };
-
   useEffect(() => {
-    if (visible && planPath) {
-      loadContent(planPath);
-      loadHistory();
+    if (visible && currentPath) {
+      loadContent(currentPath);
     }
-  }, [visible, planPath, refreshKey]);
+  }, [visible, currentPath, refreshKey]);
+
+  // Clamp selectedIndex when planPaths changes
+  useEffect(() => {
+    if (selectedIndex >= planPaths.length) {
+      setSelectedIndex(Math.max(0, planPaths.length - 1));
+    }
+  }, [planPaths.length]);
 
   if (!visible) return null;
 
@@ -117,21 +115,35 @@ export function PlanPanel({ planPath, folderPath, visible, onClose, refreshKey, 
         </span>
       </div>
 
-      {/* File path */}
-      {currentPath && (
+      {/* Dropdown selector */}
+      {planPaths.length > 0 && (
         <div
           style={{
-            padding: "4px 12px",
-            fontSize: 11,
-            color: "#999",
+            padding: "6px 12px",
             borderBottom: "1px solid #eee",
             background: "#fff",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
           }}
         >
-          {currentPath.split("/").pop()}
+          <select
+            value={selectedIndex}
+            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            style={{
+              width: "100%",
+              fontSize: 12,
+              padding: "4px 6px",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+              background: "#fff",
+              color: "#333",
+              cursor: "pointer",
+            }}
+          >
+            {planPaths.map((p, i) => (
+              <option key={p} value={i}>
+                {pathToName(p)}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -153,54 +165,6 @@ export function PlanPanel({ planPath, folderPath, visible, onClose, refreshKey, 
           </div>
         )}
       </div>
-
-      {/* History */}
-      {planFiles.length > 0 && (
-        <div style={{ borderTop: "1px solid #e0e0e0", background: "#fff" }}>
-          <div
-            onClick={() => setShowHistory(!showHistory)}
-            style={{
-              padding: "8px 12px",
-              cursor: "pointer",
-              fontSize: 12,
-              color: "#666",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>History ({planFiles.length})</span>
-            <span>{showHistory ? "▲" : "▼"}</span>
-          </div>
-          {showHistory && (
-            <div style={{ maxHeight: 200, overflow: "auto", padding: "0 12px 8px" }}>
-              {planFiles.map((pf) => (
-                <div
-                  key={pf.path}
-                  onClick={() => loadContent(pf.path)}
-                  style={{
-                    padding: "4px 8px",
-                    marginBottom: 2,
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    fontSize: 12,
-                    background: pf.path === currentPath ? "#e3f2fd" : "transparent",
-                    color: "#333",
-                    display: "flex",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                    {pf.name}
-                  </span>
-                  <span style={{ color: "#999", fontSize: 11, marginLeft: 8, whiteSpace: "nowrap" }}>
-                    {pf.modified_at}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ class Task(BaseModel):
     id: str
     name: str
     folder_id: str
-    plan_path: str | None = None
+    plan_paths: list[str] = []
 
 
 class TaskCreate(BaseModel):
@@ -42,3 +42,8 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     mode: Literal["plan", "code"] = "code"
+
+
+class PermissionDecision(BaseModel):
+    decision: Literal["allow", "deny"]
+    message: str = ""
