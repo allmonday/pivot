@@ -1,0 +1,531 @@
+/* ============================================
+   ChatPanel + MessageBubble — ChatGPT Style
+   ============================================ */
+
+/* ---------- Chat Panel Container ---------- */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+}
+
+/* ---------- Header ---------- */
+.chat-header {
+  padding: 0 16px;
+  height: 48px;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chat-mode-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid #d9d9d9;
+  background: #f7f7f8;
+}
+
+.chat-mode-btn {
+  padding: 5px 14px;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: #666;
+  font-weight: 400;
+  transition: background 0.2s, color 0.2s;
+}
+
+.chat-mode-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chat-mode-btn--active-plan {
+  background: #ff9800;
+  color: #fff;
+  font-weight: 600;
+}
+
+.chat-mode-btn--active-code {
+  background: #1976d2;
+  color: #fff;
+  font-weight: 600;
+}
+
+.chat-session-id {
+  font-size: 11px;
+  color: #999;
+  font-family: monospace;
+}
+
+/* ---------- Messages Area ---------- */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.chat-messages-inner {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 24px 24px 16px;
+}
+
+/* ---------- Message Row ---------- */
+.chat-message {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+  animation: chatFadeIn 0.3s ease-out;
+}
+
+.chat-message + .chat-message {
+  border-top: none;
+}
+
+.chat-message--user {
+  flex-direction: row-reverse;
+}
+
+/* Streaming message should NOT re-trigger animation */
+.chat-message--streaming {
+  animation: none;
+}
+
+/* ---------- Avatar ---------- */
+.chat-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  user-select: none;
+}
+
+.chat-avatar--user {
+  background: #1976d2;
+}
+
+.chat-avatar--assistant {
+  background: #10a37f;
+}
+
+/* ---------- Message Content ---------- */
+.chat-message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-bubble-user {
+  display: inline-block;
+  background: #f4f4f4;
+  color: #1a1a1a;
+  padding: 10px 16px;
+  border-radius: 18px;
+  max-width: 85%;
+  word-break: break-word;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.chat-bubble-assistant {
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* ---------- Typing Indicator ---------- */
+.chat-typing {
+  display: flex;
+  gap: 5px;
+  padding: 8px 0 8px 46px;
+  align-items: center;
+}
+
+.chat-typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #999;
+  animation: chatBounce 1.4s infinite ease-in-out;
+}
+
+.chat-typing-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.chat-typing-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes chatBounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+}
+
+@keyframes chatFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Input Area ---------- */
+.chat-input-area {
+  padding: 12px 24px 24px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-input-wrapper {
+  max-width: 768px;
+  width: 100%;
+  position: relative;
+}
+
+.chat-input {
+  width: 100%;
+  padding: 14px 52px 14px 18px;
+  border-radius: 24px;
+  border: 1px solid #d9d9d9;
+  font-size: 15px;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 48px;
+  max-height: 160px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.chat-input:focus {
+  border-color: #1976d2;
+  box-shadow: 0 2px 12px rgba(25, 118, 210, 0.12);
+}
+
+.chat-input:disabled {
+  background: #f9f9f9;
+  opacity: 0.7;
+}
+
+.chat-input::placeholder {
+  color: #aaa;
+}
+
+.chat-send-btn {
+  position: absolute;
+  right: 8px;
+  top: calc(50% - 4px);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  transition: background 0.2s, transform 0.1s;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+  background: #1565c0;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.chat-send-btn:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.chat-send-btn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+/* ---------- Tool Card (Collapsible) ---------- */
+.tool-card {
+  margin-top: 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.tool-card-header {
+  padding: 8px 12px;
+  background: #f7f7f8;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 12px;
+  color: #444;
+  transition: background 0.15s;
+}
+
+.tool-card-header:hover {
+  background: #eee;
+}
+
+.tool-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #e0e0e0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.tool-card-toggle {
+  font-size: 10px;
+  color: #999;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.tool-card-body {
+  margin: 0;
+  padding: 10px 12px;
+  background: #fafafa;
+  overflow: auto;
+  max-height: 240px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  line-height: 1.5;
+}
+
+.tool-card-body-wrap {
+  border-top: 1px solid #e5e5e5;
+}
+
+.tool-card-body--result {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+/* ---------- Tool One-Line ---------- */
+.tool-one-line {
+  margin-top: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.tool-one-line-header {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  background: #f7f7f8;
+  border-radius: 8px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 12px;
+  color: #666;
+  transition: background 0.15s;
+}
+
+.tool-one-line-header:hover {
+  background: #eee;
+}
+
+.tool-one-line-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #e0e0e0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.tool-one-line-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Tool Diff View ---------- */
+.tool-diff {
+  padding: 0;
+}
+
+.tool-diff-filename {
+  padding: 6px 12px;
+  background: #f0f0f0;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 11px;
+  color: #666;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.tool-diff-panes {
+  display: flex;
+  gap: 0;
+}
+
+.tool-diff-pane {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  max-height: 300px;
+}
+
+.tool-diff-pane--old {
+  border-right: 1px solid #e5e5e5;
+}
+
+.tool-diff-pane-header {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tool-diff-pane--old .tool-diff-pane-header {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.tool-diff-pane--new .tool-diff-pane-header {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.tool-diff-content {
+  margin: 0;
+  padding: 8px 12px;
+  background: #fafafa;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------- Code Block ---------- */
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.code-block-wrapper:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* ---------- Options Card (present_options tool) ---------- */
+.chat-options-card {
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.chat-options-question {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.chat-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-option-btn {
+  padding: 9px 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.chat-option-btn:hover {
+  border-color: #1976d2;
+  color: #1976d2;
+  background: #e3f2fd;
+}
+
+.chat-option-btn:active {
+  background: #bbdefb;
+}
+
+/* ---------- Scrollbar ---------- */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
