@@ -41,24 +41,18 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
   };
 
   useEffect(() => {
-    fetchFolders().then((folds) => {
-      setFolders(folds);
-      setExpandedFolderIds(new Set(folds.map(f => f.id)));
-      folds.forEach(f => reloadTasks(f.id));
-    }).catch(console.error);
+    fetchFolders().then(setFolders).catch(console.error);
   }, []);
 
   const handleFolderClick = (folder: Folder) => {
-    setExpandedFolderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(folder.id)) {
-        next.delete(folder.id);
-      } else {
-        next.add(folder.id);
-        onSelectFolder(folder);
-      }
-      return next;
-    });
+    const isCurrentlyExpanded = expandedFolderIds.has(folder.id);
+    if (isCurrentlyExpanded) {
+      setExpandedFolderIds((prev) => { const next = new Set(prev); next.delete(folder.id); return next; });
+    } else {
+      setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
+      onSelectFolder(folder);
+      if (!(folder.id in tasksMap)) reloadTasks(folder.id);
+    }
   };
 
   const handleFolderCreate = async () => {

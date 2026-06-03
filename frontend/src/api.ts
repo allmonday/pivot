@@ -72,6 +72,7 @@ export async function fetchMessages(taskId: string): Promise<ChatMessage[]> {
   const data = await res.json();
   return (data as ChatMessage[]).map((msg) => ({
     ...msg,
+    id: msg.id || crypto.randomUUID(),
     content: msg.content.filter((b) => b.kind !== "thinking"),
   }));
 }
@@ -82,6 +83,7 @@ export async function fetchFullHistory(taskId: string): Promise<ChatMessage[]> {
   const data = await res.json();
   return (data as ChatMessage[]).map((msg) => ({
     ...msg,
+    id: msg.id || crypto.randomUUID(),
     content: msg.content.filter((b) => b.kind !== "thinking"),
   }));
 }
