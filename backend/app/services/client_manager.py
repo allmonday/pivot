@@ -155,6 +155,7 @@ class TaskClientManager:
         prompt: str,
         mode: str,
         db: AsyncSession,
+        images: list[dict] | None = None,
     ) -> None:
         state = self._clients.get(task_id)
         if state is None:
@@ -170,7 +171,29 @@ class TaskClientManager:
         state.mode = mode
 
         try:
-            await state.client.query(prompt)
+            if images:
+                # Build AsyncIterable with image content blocks
+                async def _prompt_iterable():
+                    content: list[dict[str, Any]] = []
+                    if prompt:
+                        content.append({"type": "text", "text": prompt})
+                    for img in images:
+                        content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img["media_type"],
+                                "data": img["data"],
+                            },
+                        })
+                    yield {
+                        "type": "user",
+                        "message": {"role": "user", "content": content},
+                        "parent_tool_use_id": None,
+                    }
+                await state.client.query(_prompt_iterable())
+            else:
+                await state.client.query(prompt)
 
             async for message in state.client.receive_response():
                 # 持久化 session_id

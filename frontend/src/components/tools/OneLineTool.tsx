@@ -1,6 +1,12 @@
 import { useState } from "react";
 import type { ContentBlock } from "../../types";
 import type { ToolConfig } from "./toolConfigs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
   block: ContentBlock;
@@ -13,35 +19,38 @@ export function OneLineTool({ block, config }: Props) {
   if (block.kind === "tool_use") {
     const value = config.getValue(block.input ?? {});
     return (
-      <div className="tool-one-line">
-        <div className="tool-one-line-header" onClick={() => setOpen(!open)}>
-          <span className="tool-one-line-icon">{config.icon}</span>
-          <span className="tool-one-line-value">{value}</span>
-          <span className="tool-card-toggle">{open ? "\u25BC" : "\u25B6"}</span>
-        </div>
-        {open && block.input && (
-          <pre className="tool-card-body">
+      <Collapsible open={open} onOpenChange={setOpen} className="mt-2 rounded-lg overflow-hidden text-[13px]">
+        <CollapsibleTrigger className="w-full px-2.5 py-1.5 flex items-center gap-2 cursor-pointer bg-muted/80 hover:bg-accent rounded-lg font-mono text-[12px] text-muted-foreground transition-colors">
+          <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1 rounded bg-muted-foreground/20 text-[10px] font-semibold text-muted-foreground shrink-0">
+            {config.icon}
+          </span>
+          <span className="flex-1 truncate">{value}</span>
+          {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <pre className="m-0 p-2.5 bg-muted/30 overflow-auto max-h-[240px] text-[12px] font-mono leading-relaxed">
             {JSON.stringify(block.input, null, 2)}
           </pre>
-        )}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
 
-  // tool_result
   if (config.resultDisplay === "hidden") return null;
   return (
-    <div className="tool-one-line">
-      <div className="tool-one-line-header" onClick={() => setOpen(!open)}>
-        <span className="tool-one-line-icon">out</span>
-        <span className="tool-one-line-value">output</span>
-        <span className="tool-card-toggle">{open ? "\u25BC" : "\u25B6"}</span>
-      </div>
-      {open && (
-        <pre className="tool-card-body tool-card-body--result">
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-2 rounded-lg overflow-hidden text-[13px]">
+      <CollapsibleTrigger className="w-full px-2.5 py-1.5 flex items-center gap-2 cursor-pointer bg-muted/80 hover:bg-accent rounded-lg font-mono text-[12px] text-muted-foreground transition-colors">
+        <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1 rounded bg-muted-foreground/20 text-[10px] font-semibold text-muted-foreground shrink-0">
+          out
+        </span>
+        <span className="flex-1 truncate">output</span>
+        {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre className="m-0 p-2.5 bg-zinc-900 text-zinc-300 overflow-auto max-h-[240px] text-[12px] font-mono leading-relaxed">
           {block.content}
         </pre>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

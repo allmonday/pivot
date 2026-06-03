@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github-dark.css";
 import { fetchFileContent } from "../api";
+import { X } from "lucide-react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface Props {
   planPaths: string[];
@@ -14,39 +12,11 @@ interface Props {
   width: number;
 }
 
-function CodeBlock({ children }: { children: React.ReactNode }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    const text = extractText(children);
-    navigator.clipboard.writeText(text.trim());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="code-block-wrapper">
-      <pre>{children}</pre>
-      <button className="code-copy-btn" onClick={handleCopy}>
-        {copied ? "Copied!" : "Copy"}
-      </button>
-    </div>
-  );
-}
-
-function extractText(node: React.ReactNode): string {
-  if (typeof node === "string") return node;
-  if (typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join("");
-  if (node && typeof node === "object" && "props" in node) {
-    return extractText((node as { props: { children?: React.ReactNode } }).props.children);
-  }
-  return "";
-}
-
 function pathToName(path: string): string {
   return path.split("/").pop() || path;
 }
 
-export function PlanPanel({ planPaths, folderPath, visible, onClose, refreshKey, width }: Props) {
+export function PlanPanel({ planPaths, folderPath: _folderPath, visible, onClose, refreshKey, width }: Props) {
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +43,6 @@ export function PlanPanel({ planPaths, folderPath, visible, onClose, refreshKey,
     }
   }, [visible, currentPath, refreshKey]);
 
-  // Clamp selectedIndex when planPaths changes
   useEffect(() => {
     if (selectedIndex >= planPaths.length) {
       setSelectedIndex(Math.max(0, planPaths.length - 1));
@@ -84,59 +53,23 @@ export function PlanPanel({ planPaths, folderPath, visible, onClose, refreshKey,
 
   return (
     <div
-      style={{
-        width,
-        borderLeft: "1px solid #e0e0e0",
-        display: "flex",
-        flexDirection: "column",
-        background: "#fafafa",
-        flexShrink: 0,
-      }}
+      className="border-l border-border flex flex-col bg-muted/50 shrink-0"
+      style={{ width }}
     >
-      {/* Header */}
-      <div
-        style={{
-          padding: "8px 12px",
-          borderBottom: "1px solid #e0e0e0",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#fff",
-        }}
-      >
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>Plan</span>
-        <span
+      <div className="px-3 py-2 border-b border-border flex justify-between items-center bg-background">
+        <span className="text-[13px] font-semibold text-foreground">Plan</span>
+        <X
+          className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
           onClick={onClose}
-          style={{ cursor: "pointer", fontSize: 16, color: "#999", lineHeight: 1 }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#333")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#999")}
-        >
-          ×
-        </span>
+        />
       </div>
 
-      {/* Dropdown selector */}
       {planPaths.length > 0 && (
-        <div
-          style={{
-            padding: "6px 12px",
-            borderBottom: "1px solid #eee",
-            background: "#fff",
-          }}
-        >
+        <div className="px-3 py-1.5 border-b border-border/50 bg-background">
           <select
             value={selectedIndex}
             onChange={(e) => setSelectedIndex(Number(e.target.value))}
-            style={{
-              width: "100%",
-              fontSize: 12,
-              padding: "4px 6px",
-              border: "1px solid #ddd",
-              borderRadius: 4,
-              background: "#fff",
-              color: "#333",
-              cursor: "pointer",
-            }}
+            className="w-full text-xs py-1 px-1.5 border border-border rounded bg-background text-foreground cursor-pointer"
           >
             {planPaths.map((p, i) => (
               <option key={p} value={i}>
@@ -147,21 +80,14 @@ export function PlanPanel({ planPaths, folderPath, visible, onClose, refreshKey,
         </div>
       )}
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: "auto", padding: "12px 16px" }}>
+      <div className="flex-1 overflow-auto px-4 py-3 scrollbar-thin">
         {loading ? (
-          <div style={{ color: "#999", fontSize: 13 }}>Loading...</div>
+          <div className="text-muted-foreground text-[13px]">Loading...</div>
         ) : error ? (
-          <div style={{ color: "#e53935", fontSize: 13 }}>{error}</div>
+          <div className="text-destructive text-[13px]">{error}</div>
         ) : (
-          <div style={{ fontSize: 13, lineHeight: 1.6 }} className="markdown-body">
-            <Markdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={{ pre: CodeBlock }}
-            >
-              {content}
-            </Markdown>
+          <div className="text-[13px] leading-relaxed markdown-body">
+            <MarkdownRenderer content={content} />
           </div>
         )}
       </div>

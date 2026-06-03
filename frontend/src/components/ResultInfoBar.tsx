@@ -15,15 +15,15 @@ function formatDuration(ms: number): string {
 
 export function ResultInfoBar({ info }: Props) {
   return (
-    <div className="result-info-bar">
+    <div className="flex gap-4 px-4 py-2 mt-1 bg-muted/50 rounded-lg text-xs text-muted-foreground">
       {info.total_cost_usd != null && (
-        <span className="result-info-item">Cost: ${info.total_cost_usd.toFixed(4)}</span>
+        <span>Cost: ${info.total_cost_usd.toFixed(4)}</span>
       )}
       {info.duration_ms != null && (
-        <span className="result-info-item">Duration: {formatDuration(info.duration_ms)}</span>
+        <span>Duration: {formatDuration(info.duration_ms)}</span>
       )}
       {info.num_turns != null && (
-        <span className="result-info-item">Turns: {info.num_turns}</span>
+        <span>Turns: {info.num_turns}</span>
       )}
     </div>
   );

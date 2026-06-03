@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, ContentBlock, ResultInfo, PermissionRequest } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChatMessage, ContentBlock, ResultInfo, PermissionRequest, ImageAttachment } from "../types";
 import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission } from "../api";
 import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
-import "./chat.css";
+import { Button } from "@/components/ui/button";
+import { Paperclip, X } from "lucide-react";
 
 interface Props {
   taskId: string;
@@ -16,6 +17,36 @@ interface Props {
   hasPlan: boolean;
 }
 
+const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGES = 5;
+
+function fileToAttachment(file: File): Promise<ImageAttachment> {
+  return new Promise((resolve, reject) => {
+    if (!VALID_IMAGE_TYPES.includes(file.type)) {
+      reject(new Error(`Unsupported format: ${file.type}`));
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      reject(new Error(`File too large: ${(file.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve({
+        id: crypto.randomUUID(),
+        base64: dataUrl.split(",")[1],
+        mediaType: file.type,
+        previewUrl: dataUrl,
+        name: file.name || "clipboard.png",
+      });
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -25,12 +56,13 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   const [reconnecting, setReconnecting] = useState(false);
   const [resultInfo, setResultInfo] = useState<ResultInfo | null>(null);
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null);
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const accumulatedRef = useRef<ContentBlock[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // sync when parent passes new initialMessages (task switch)
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -42,13 +74,11 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     setMessages(initialMessages);
   }, [initialMessages]);
 
-  // mount 时检查是否有活跃流可以重连
   useEffect(() => {
     let cancelled = false;
     checkActiveStream(taskId).then((res) => {
       if (cancelled) return;
       if (res.active) {
-        // 有活跃流，开始重连
         setReconnecting(true);
         setStreaming(true);
         onStreamingChange(true);
@@ -119,16 +149,13 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     return () => {
       cancelled = true;
     };
-    // 仅在 mount 时执行
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
-  // auto-scroll to bottom when new content arrives
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages, streamContent]);
 
-  // auto-grow textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
@@ -137,11 +164,19 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     }
   }, [input]);
 
-  const doSend = (text: string) => {
-    const userMsg: ChatMessage = {
-      role: "user",
-      content: [{ kind: "text", text }],
-    };
+  const doSend = (text: string, images?: ImageAttachment[]) => {
+    const content: ContentBlock[] = [];
+    if (text.trim()) {
+      content.push({ kind: "text", text });
+    }
+    for (const img of images ?? []) {
+      content.push({
+        kind: "image",
+        source: { type: "base64", media_type: img.mediaType, data: img.base64 },
+        text: img.name,
+      });
+    }
+    const userMsg: ChatMessage = { role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
     setResultInfo(null);
     setPendingPermission(null);
@@ -206,20 +241,32 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       () => {
         setStreaming(false);
         onStreamingChange(false);
-      }
+      },
+      images
     );
   };
 
+  const doSendRef = useRef(doSend);
+  doSendRef.current = doSend;
+
+  const handleSelectOption = useCallback((text: string) => {
+    doSendRef.current(text);
+  }, []);
+
+  const stableOnSelectOption = !streaming ? handleSelectOption : undefined;
+
   const handleSend = () => {
-    if (!input.trim() || streaming) return;
+    if (streaming) return;
+    if (!input.trim() && attachments.length === 0) return;
     const text = input;
+    const images = [...attachments];
     setInput("");
-    doSend(text);
+    setAttachments([]);
+    doSend(text, images);
   };
 
   const handleStop = async () => {
     await interruptStream(taskId);
-    // 将已累积的内容保存为消息
     const final = accumulatedRef.current;
     if (final.length > 0) {
       setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
@@ -230,40 +277,57 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     onStreamingChange(false);
   };
 
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      const newAttachments = await Promise.all(imageFiles.map(fileToAttachment));
+      setAttachments((prev) => [...prev, ...newAttachments].slice(0, MAX_IMAGES));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const newAttachments = await Promise.all(files.map(fileToAttachment));
+    setAttachments((prev) => [...prev, ...newAttachments].slice(0, MAX_IMAGES));
+    e.target.value = "";
+  };
+
+  const canSend = !streaming && (input.trim() || attachments.length > 0);
+
   return (
-    <div className="chat-panel">
+    <div className="flex flex-col h-full bg-background">
       {/* Header bar */}
-      <div className="chat-header">
-        <span className="chat-session-id">
-          session: {sessionId ? sessionId.slice(0, 8) + "..." : "new"}
-        </span>
+      <div className="px-4 h-12 border-b flex items-center shrink-0 gap-2">
         {hasPlan && (
-          <button
+          <Button
+            variant={planVisible ? "default" : "outline"}
+            size="sm"
             onClick={onTogglePlan}
-            style={{
-              marginLeft: 8,
-              padding: "2px 8px",
-              border: planVisible ? "1px solid #1976d2" : "1px solid #ddd",
-              borderRadius: 4,
-              background: planVisible ? "#e3f2fd" : "#fff",
-              color: planVisible ? "#1976d2" : "#666",
-              cursor: "pointer",
-              fontSize: 12,
-            }}
+            className="ml-2 h-6 text-xs"
           >
             Plan
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Messages */}
-      <div className="chat-messages">
-        <div className="chat-messages-inner">
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="max-w-3xl mx-auto px-6 py-6 pb-4">
           {messages.map((msg, i) => (
             <MessageBubble
               key={i}
               message={msg}
-              onSelectOption={!streaming ? doSend : undefined}
+              onSelectOption={stableOnSelectOption}
             />
           ))}
           {streaming && streamContent.length > 0 && (
@@ -273,43 +337,47 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             />
           )}
           {streaming && streamContent.length === 0 && (
-            <div className="chat-typing">
+            <div className="flex gap-1.5 pl-[46px] py-2 items-center">
               {reconnecting && (
-                <span style={{ fontSize: 12, color: "#888", marginRight: 8 }}>
-                  Reconnecting...
-                </span>
+                <span className="text-xs text-muted-foreground mr-2">Reconnecting...</span>
               )}
-              <div className="chat-typing-dot" />
-              <div className="chat-typing-dot" />
-              <div className="chat-typing-dot" />
+              <div className="w-[7px] h-[7px] rounded-full bg-muted-foreground/60" style={{ animation: "chatBounce 1.4s infinite ease-in-out" }} />
+              <div className="w-[7px] h-[7px] rounded-full bg-muted-foreground/60" style={{ animation: "chatBounce 1.4s infinite ease-in-out 0.16s" }} />
+              <div className="w-[7px] h-[7px] rounded-full bg-muted-foreground/60" style={{ animation: "chatBounce 1.4s infinite ease-in-out 0.32s" }} />
             </div>
           )}
           {streaming && pendingPermission && (
-            <div className="permission-banner">
-              <div className="permission-banner-header">
-                <span className="permission-banner-icon">!</span>
+            <div className="mt-2.5 p-3 border border-amber-500 rounded-xl bg-amber-50">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-xs font-bold">!</span>
                 <span>{pendingPermission.title || `${pendingPermission.tool_name} permission`}</span>
               </div>
               {pendingPermission.description && (
-                <div className="permission-banner-desc">{pendingPermission.description}</div>
+                <div className="mt-1.5 text-[13px] text-amber-800">{pendingPermission.description}</div>
               )}
               {pendingPermission.blocked_path && (
-                <div className="permission-banner-path">{pendingPermission.blocked_path}</div>
+                <div className="mt-1 text-xs font-mono text-amber-900 bg-amber-100 px-2 py-1 rounded">
+                  {pendingPermission.blocked_path}
+                </div>
               )}
-              <div className="permission-banner-actions">
-                <button
-                  className="permission-allow-btn"
+              <div className="mt-2.5 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-semibold"
                   onClick={async () => {
                     try {
                       await resolvePermission(taskId, pendingPermission.request_id, "allow");
-                    } catch { /* ignore if already resolved */ }
+                    } catch { /* ignore */ }
                     setPendingPermission(null);
                   }}
                 >
                   Allow
-                </button>
-                <button
-                  className="permission-deny-btn"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-500 bg-red-50 text-red-900 hover:bg-red-100 font-semibold"
                   onClick={async () => {
                     try {
                       await resolvePermission(taskId, pendingPermission.request_id, "deny");
@@ -318,7 +386,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
                   }}
                 >
                   Deny
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -328,30 +396,65 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       </div>
 
       {/* Input */}
-      <div className="chat-input-area">
-        <div className="chat-mode-toggle">
+      <div className="px-6 pb-6 flex justify-center items-end shrink-0 gap-5">
+        <div className="flex rounded-full overflow-hidden border border-border bg-muted shrink-0 self-center">
           <button
-            className={`chat-mode-btn ${mode === "plan" ? "chat-mode-btn--active-plan" : ""}`}
+            className={`px-3.5 py-1.5 text-[13px] border-none cursor-pointer transition-colors ${
+              mode === "plan" ? "bg-orange-500 text-white font-semibold" : "bg-transparent text-muted-foreground"
+            } ${streaming ? "opacity-60 cursor-default" : ""}`}
             onClick={() => setMode("plan")}
             disabled={streaming}
           >
             Plan
           </button>
           <button
-            className={`chat-mode-btn ${mode === "code" ? "chat-mode-btn--active-code" : ""}`}
+            className={`px-3.5 py-1.5 text-[13px] border-none cursor-pointer transition-colors ${
+              mode === "code" ? "bg-primary text-primary-foreground font-semibold" : "bg-transparent text-muted-foreground"
+            } ${streaming ? "opacity-60 cursor-default" : ""}`}
             onClick={() => setMode("code")}
             disabled={streaming}
           >
             Code
           </button>
         </div>
-        <div className="chat-input-wrapper">
+        <div className="max-w-3xl w-full relative">
+          {/* Image preview */}
+          {attachments.length > 0 && (
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {attachments.map((att) => (
+                <div key={att.id} className="relative group">
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    className="w-16 h-16 object-cover rounded-lg border border-border"
+                  />
+                  <button
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
           <textarea
             ref={textareaRef}
-            className="chat-input"
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -359,12 +462,23 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
               }
             }}
             placeholder="Message... (Shift+Enter for new line)"
+            className="w-full py-3.5 pl-[42px] pr-[52px] rounded-3xl border border-input text-[15px] resize-none outline-none leading-relaxed min-h-[48px] max-h-[160px] overflow-hidden shadow-sm transition-[border-color,box-shadow] focus:border-primary focus:shadow-[0_2px_12px_rgba(25,118,210,0.12)] disabled:bg-muted/50 disabled:opacity-70 placeholder:text-muted-foreground/50"
           />
+
+          {/* Attach button */}
+          <button
+            className="absolute left-2 top-[calc(50%-4px)] -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming}
+            title="Attach image"
+          >
+            <Paperclip size={18} />
+          </button>
+
           {streaming && (
             <button
-              className="chat-send-btn"
+              className="absolute right-12 top-[calc(50%-4px)] -translate-y-1/2 w-9 h-9 rounded-full bg-background border border-destructive text-destructive flex items-center justify-center cursor-pointer transition-colors hover:bg-destructive/10"
               onClick={handleStop}
-              style={{ right: 48, background: "#fff", border: "1px solid #e53935", color: "#e53935" }}
               title="Stop"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -373,9 +487,13 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             </button>
           )}
           <button
-            className="chat-send-btn"
+            className={`absolute right-2 top-[calc(50%-4px)] -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+              !canSend
+                ? "bg-muted text-muted-foreground cursor-default"
+                : "bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90 active:scale-95"
+            }`}
             onClick={handleSend}
-            disabled={streaming || !input.trim()}
+            disabled={!canSend}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 19V5M5 12l7-7 7 7" />

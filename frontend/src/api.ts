@@ -1,4 +1,4 @@
-import type { Folder, FolderCreate, Task, TaskCreate, TaskUpdate, ChatMessage, PlanFile } from "./types";
+import type { Folder, FolderCreate, Task, TaskCreate, TaskUpdate, ChatMessage, PlanFile, ImageAttachment } from "./types";
 
 const BASE = "http://localhost:8000/api";
 
@@ -169,7 +169,8 @@ export function sendChat(
   mode: string = "code",
   onEvent: (eventType: string, data: Record<string, unknown>) => void,
   onError: (err: Error) => void,
-  onDone: () => void
+  onDone: () => void,
+  images?: ImageAttachment[],
 ): AbortController {
   const controller = new AbortController();
   let sseController: AbortController | null = null;
@@ -183,6 +184,11 @@ export function sendChat(
       task_id: taskId,
       message,
       mode,
+      images: images?.map((img) => ({
+        media_type: img.mediaType,
+        data: img.base64,
+        name: img.name,
+      })) ?? [],
     }),
     signal: controller.signal,
   })

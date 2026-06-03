@@ -3,7 +3,7 @@ import type { Task, Folder, ChatMessage } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
-import { fetchFolders, fetchTasks, fetchSession, fetchMessages } from "./api";
+import { fetchFolders, fetchTasks, fetchSession, fetchMessages, checkActiveStream } from "./api";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -27,7 +27,8 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([]);
-  const [working, setWorking] = useState(false);
+  const [workingTaskIds, setWorkingTaskIds] = useState<Set<string>>(new Set());
+  const [doneTaskIds, setDoneTaskIds] = useState<Set<string>>(new Set());
   const [planVisible, setPlanVisible] = useState(false);
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
   const [planWidth, setPlanWidth] = useState(400);
@@ -38,7 +39,6 @@ export default function App() {
   };
 
   const handleTaskSelect = async (task: Task) => {
-    // Ensure folder is set for this task
     if (!selectedFolder || selectedFolder.id !== task.folder_id) {
       const folders = await fetchFolders();
       const folder = folders.find((f) => f.id === task.folder_id);
@@ -46,7 +46,7 @@ export default function App() {
     }
 
     setParamsInUrl(task.folder_id, task.id);
-    setWorking(false);
+    setDoneTaskIds((prev) => { if (!prev.has(task.id)) return prev; const n = new Set(prev); n.delete(task.id); return n; });
     setSelectedTask(task);
     setPlanVisible(task.plan_paths.length > 0);
     const [existing, history] = await Promise.all([
@@ -57,8 +57,14 @@ export default function App() {
     setInitialMessages(history);
   };
 
-  const handleStreamingDone = (streaming: boolean) => {
-    setWorking(streaming);
+  const handleStreamingChange = (taskId: string, streaming: boolean) => {
+    if (streaming) {
+      setWorkingTaskIds((prev) => { const n = new Set(prev); n.add(taskId); return n; });
+      setDoneTaskIds((prev) => { if (!prev.has(taskId)) return prev; const n = new Set(prev); n.delete(taskId); return n; });
+    } else {
+      setWorkingTaskIds((prev) => { const n = new Set(prev); n.delete(taskId); return n; });
+      setDoneTaskIds((prev) => { const n = new Set(prev); n.add(taskId); return n; });
+    }
     if (!streaming) {
       setPlanRefreshKey((k) => k + 1);
       if (selectedTask) {
@@ -73,7 +79,28 @@ export default function App() {
     }
   };
 
-  // restore folder and task from URL on mount
+  // Poll background tasks' active stream status
+  useEffect(() => {
+    const ids = workingTaskIds;
+    if (ids.size === 0) return;
+    const timer = setInterval(() => {
+      ids.forEach((id) => {
+        checkActiveStream(id).then((res) => {
+          if (!res.active) {
+            setWorkingTaskIds((prev) => {
+              if (!prev.has(id)) return prev;
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            setDoneTaskIds((prev) => { const n = new Set(prev); n.add(id); return n; });
+          }
+        });
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [workingTaskIds]);
+
   useEffect(() => {
     const { folderId, taskId } = getParamsFromUrl();
     if (!folderId && !taskId) return;
@@ -105,37 +132,28 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif" }}>
-      {/* Left: Sidebar (Folders + Tasks) */}
-      <div
-        style={{
-          width: 260,
-          borderRight: "1px solid #e0e0e0",
-          overflow: "auto",
-          background: "#fafafa",
-          flexShrink: 0,
-        }}
-      >
+    <div className="flex h-screen font-sans">
+      <div className="w-[260px] border-r border-border overflow-auto bg-muted/50 shrink-0">
         <Sidebar
           selectedFolderId={selectedFolder?.id ?? null}
           selectedTaskId={selectedTask?.id ?? null}
-          workingTaskId={working ? selectedTask?.id ?? null : null}
+          workingTaskIds={workingTaskIds}
+          doneTaskIds={doneTaskIds}
           onSelectFolder={handleFolderSelect}
           onSelectTask={handleTaskSelect}
         />
       </div>
 
-      {/* Right: Chat + Plan */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div className="flex-1 flex flex-col min-h-0">
         {selectedTask ? (
-          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+          <div className="flex-1 flex min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <ChatPanel
                 taskId={selectedTask.id}
                 sessionId={sessionId}
                 initialMessages={initialMessages}
                 onSessionIdChange={setSessionId}
-                onStreamingChange={handleStreamingDone}
+                onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
                 planVisible={planVisible}
                 onTogglePlan={() => setPlanVisible(!planVisible)}
                 hasPlan={selectedTask.plan_paths.length > 0}
@@ -143,13 +161,7 @@ export default function App() {
             </div>
             {planVisible && (
               <div
-                style={{
-                  width: 4,
-                  cursor: "col-resize",
-                  background: "#e0e0e0",
-                  flexShrink: 0,
-                  transition: "background 0.15s",
-                }}
+                className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startX = e.clientX;
@@ -165,8 +177,6 @@ export default function App() {
                   document.addEventListener("mousemove", onMove);
                   document.addEventListener("mouseup", onUp);
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#1976d2")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#e0e0e0")}
               />
             )}
             <PlanPanel
@@ -179,15 +189,7 @@ export default function App() {
             />
           </div>
         ) : (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#999",
-            }}
-          >
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
             选择一个任务开始对话
           </div>
         )}

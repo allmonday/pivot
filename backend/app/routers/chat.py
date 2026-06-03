@@ -46,6 +46,7 @@ async def chat(req: ChatRequest):
                     prompt=req.message,
                     mode=req.mode,
                     db=db,
+                    images=[img.model_dump() for img in req.images],
                 )
         except Exception as e:
             # send_query 内部已经处理了异常推送，这里做兜底

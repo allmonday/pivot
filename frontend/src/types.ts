@@ -34,11 +34,24 @@ export interface FileInfo {
 }
 
 export interface ContentBlock {
-  kind: "text" | "tool_use" | "tool_result" | "unknown";
+  kind: "text" | "tool_use" | "tool_result" | "thinking" | "image" | "unknown";
   text?: string;
   name?: string;
   input?: Record<string, unknown>;
   content?: string;
+  source?: {
+    type: "base64";
+    media_type: string;
+    data: string;
+  };
+}
+
+export interface ImageAttachment {
+  id: string;
+  base64: string;
+  mediaType: string;
+  previewUrl: string;
+  name: string;
 }
 
 export interface ChatMessage {

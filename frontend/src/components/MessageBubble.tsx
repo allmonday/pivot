@@ -1,12 +1,9 @@
-import { useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github-dark.css";
+import { memo } from "react";
 import type { ChatMessage, ContentBlock } from "../types";
 import { getToolConfig } from "./tools/toolConfigs";
 import { OneLineTool } from "./tools/OneLineTool";
 import { CollapsibleTool } from "./tools/CollapsibleTool";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface Props {
   message: ChatMessage;
@@ -14,50 +11,23 @@ interface Props {
   onSelectOption?: (text: string) => void;
 }
 
-function CodeBlock({ children }: { children: React.ReactNode }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    const text = extractText(children);
-    navigator.clipboard.writeText(text.trim());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="code-block-wrapper">
-      <pre>{children}</pre>
-      <button className="code-copy-btn" onClick={handleCopy}>
-        {copied ? "Copied!" : "Copy"}
-      </button>
-    </div>
-  );
-}
-
-function extractText(node: React.ReactNode): string {
-  if (typeof node === "string") return node;
-  if (typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join("");
-  if (node && typeof node === "object" && "props" in node) {
-    return extractText((node as { props: { children?: React.ReactNode } }).props.children);
-  }
-  return "";
-}
-
-function ToolBlock({ block, onSelectOption }: { block: ContentBlock; onSelectOption?: (text: string) => void }) {
+const ToolBlock = memo(function ToolBlock({ block, onSelectOption }: { block: ContentBlock; onSelectOption?: (text: string) => void }) {
   const config = getToolConfig(block.name ?? "");
 
-  // present_options: special rendering handled by parent
   if (block.kind === "tool_use" && block.name === "present_options" && onSelectOption) {
     const input = (block.input ?? {}) as Record<string, unknown>;
     const question = String(input.question ?? "");
     const options = (input.options as string[]) ?? [];
     return (
-      <div className="chat-options-card">
-        {question && <div className="chat-options-question">{question}</div>}
-        <div className="chat-options-list">
+      <div className="mt-2.5 p-3 border border-border rounded-xl bg-muted/50">
+        {question && <div className="text-sm font-semibold text-foreground mb-2.5">{question}</div>}
+        <div className="flex flex-col gap-1.5">
           {options.map((opt, j) => (
-            <button key={j} className="chat-option-btn" onClick={() => onSelectOption(opt)}>
+            <button
+              key={j}
+              className="py-2 px-3.5 border border-border rounded-lg bg-background text-foreground text-[13px] leading-snug text-left cursor-pointer transition-colors hover:border-primary hover:text-primary hover:bg-primary/5 active:bg-primary/10"
+              onClick={() => onSelectOption(opt)}
+            >
               {opt}
             </button>
           ))}
@@ -74,36 +44,47 @@ function ToolBlock({ block, onSelectOption }: { block: ContentBlock; onSelectOpt
   }
 
   return <CollapsibleTool block={block} config={config} />;
-}
+});
 
-export function MessageBubble({ message, isStreaming, onSelectOption }: Props) {
+export const MessageBubble = memo(function MessageBubble({ message, isStreaming, onSelectOption }: Props) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`chat-message ${isUser ? "chat-message--user" : ""} ${isStreaming ? "chat-message--streaming" : ""}`}>
-      <div className={`chat-avatar ${isUser ? "chat-avatar--user" : "chat-avatar--assistant"}`}>
+    <div
+      className={`flex gap-4 py-5 ${isStreaming ? "" : "[animation:chatFadeIn_0.3s_ease-out]"}`}
+    >
+      <div
+        className={`w-[30px] h-[30px] rounded-full shrink-0 flex items-center justify-center text-[13px] font-bold text-white select-none mt-1.5 ${
+          isUser ? "bg-primary" : "bg-emerald-600"
+        }`}
+      >
         {isUser ? "U" : "AI"}
       </div>
-      <div className="chat-message-content">
+      <div className="flex-1 min-w-0">
         {isUser ? (
-          <div className="chat-bubble-user">
-            {message.content.map((block, i) =>
-              block.kind === "text" ? <span key={i}>{block.text}</span> : null
-            )}
+          <div className="inline-block bg-primary/10 px-4 py-2.5 rounded-2xl max-w-[85%] break-words text-[15px] leading-relaxed">
+            {message.content.map((block, i) => {
+              if (block.kind === "text") return <span key={i}>{block.text}</span>;
+              if (block.kind === "image" && block.source) {
+                return (
+                  <img
+                    key={i}
+                    src={`data:${block.source.media_type};base64,${block.source.data}`}
+                    alt={block.text || "image"}
+                    className="max-w-[280px] max-h-[200px] rounded-lg mt-1.5 border border-border"
+                  />
+                );
+              }
+              return null;
+            })}
           </div>
         ) : (
           <>
             {message.content.map((block, i) => {
               if (block.kind === "text" && block.text) {
                 return (
-                  <div key={i} className="markdown-body chat-bubble-assistant">
-                    <Markdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeHighlight]}
-                      components={{ pre: CodeBlock }}
-                    >
-                      {block.text}
-                    </Markdown>
+                  <div key={i} className="markdown-body max-w-full text-[15px] leading-relaxed">
+                    <MarkdownRenderer content={block.text} />
                   </div>
                 );
               }
@@ -117,4 +98,4 @@ export function MessageBubble({ message, isStreaming, onSelectOption }: Props) {
       </div>
     </div>
   );
-}
+});

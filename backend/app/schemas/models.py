@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
 
@@ -37,11 +37,18 @@ class FileInfo(BaseModel):
     size: int
 
 
+class ImageData(BaseModel):
+    media_type: str
+    data: str
+    name: str = ""
+
+
 class ChatRequest(BaseModel):
     task_id: str
     message: str
     session_id: Optional[str] = None
     mode: Literal["plan", "code"] = "code"
+    images: list[ImageData] = Field(default_factory=list)
 
 
 class PermissionDecision(BaseModel):

@@ -2,21 +2,27 @@ import { useEffect, useState } from "react";
 import type { Folder, Task } from "../types";
 import { fetchFolders, fetchTasks, createFolder, createTask, deleteFolder, deleteTask } from "../api";
 import { FolderPicker } from "./FolderPicker";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+import { ChevronDown, ChevronRight, Plus, X, Info } from "lucide-react";
 
 interface Props {
   selectedFolderId: string | null;
   selectedTaskId: string | null;
-  workingTaskId: string | null;
+  workingTaskIds: Set<string>;
+  doneTaskIds: Set<string>;
   onSelectFolder: (folder: Folder) => void;
   onSelectTask: (task: Task) => void;
 }
 
-export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskId, onSelectFolder, onSelectTask }: Props) {
+export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, doneTaskIds, onSelectFolder, onSelectTask }: Props) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tasksMap, setTasksMap] = useState<Record<string, Task[]>>({});
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
 
-  // Folder creation form state
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderPath, setFolderPath] = useState("");
@@ -24,14 +30,9 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskId, onSel
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
 
-  // Task creation form state (per folder)
   const [addingTaskForFolder, setAddingTaskForFolder] = useState<string | null>(null);
   const [newTaskName, setNewTaskName] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
-
-  // Tooltip
-  const [hoveredInfo, setHoveredInfo] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   const reloadFolders = () => fetchFolders().then(setFolders).catch(console.error);
 
@@ -127,138 +128,77 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskId, onSel
   };
 
   return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", height: "100%" }}>
-      {hoveredInfo && (
-        <span style={{
-          position: "fixed",
-          left: tooltipPos.x,
-          top: tooltipPos.y,
-          transform: "translateY(-50%)",
-          background: "#333",
-          color: "#fff",
-          fontSize: 11,
-          padding: "4px 8px",
-          borderRadius: 4,
-          whiteSpace: "nowrap",
-          zIndex: 9999,
-          pointerEvents: "none",
-        }}>
-          {folders.find(f => f.id === hoveredInfo)?.folder_path}
-        </span>
-      )}
+    <div className="p-4 flex flex-col h-full">
+      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Folders</h3>
 
-      <h3 style={{ margin: "0 0 12px 0", fontSize: 14, color: "#666" }}>Folders</h3>
-
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div className="flex-1 overflow-auto scrollbar-thin">
         {folders.map((folder) => {
           const isExpanded = expandedFolderIds.has(folder.id);
           const tasks = tasksMap[folder.id] || [];
           return (
             <div key={folder.id}>
-              {/* Folder row */}
               <div
-                style={{
-                  padding: "8px 12px",
-                  marginBottom: 2,
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  background: "transparent",
-                  fontSize: 13,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
+                className={`group flex items-center gap-1 rounded-md px-3 py-2 mb-0.5 cursor-pointer text-[13px] hover:bg-accent ${
+                  selectedFolderId === folder.id ? "bg-accent font-medium" : ""
+                }`}
                 onClick={() => handleFolderClick(folder)}
               >
-                <span style={{ fontSize: 10, color: "#999", width: 12, flexShrink: 0 }}>
-                  {isExpanded ? "▼" : "▶"}
-                </span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                  {folder.name}
-                </span>
-                {/* + add task */}
-                <span
+                {isExpanded ? (
+                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                )}
+                <span className="truncate flex-1">{folder.name}</span>
+                <Plus
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer"
                   onClick={(e) => startAddTask(e, folder.id)}
-                  style={{
-                    cursor: "pointer",
-                    fontSize: 15,
-                    color: "#bbb",
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#1976d2")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#bbb")}
-                >
-                  +
-                </span>
-                {/* info */}
-                <span
-                  style={{ cursor: "help", fontSize: 13, color: hoveredInfo === folder.id ? "#1976d2" : "#bbb", flexShrink: 0 }}
-                  onMouseEnter={(e) => {
-                    setHoveredInfo(folder.id);
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTooltipPos({ x: rect.right + 4, y: rect.top + rect.height / 2 });
-                  }}
-                  onMouseLeave={() => setHoveredInfo(null)}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  &#9432;
-                </span>
-                {/* delete */}
-                <span
+                />
+                <Tooltip>
+                  <TooltipTrigger className="border-0 bg-transparent p-0 cursor-help">
+                    <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-xs max-w-[300px] break-all">
+                    {folder.folder_path}
+                  </TooltipContent>
+                </Tooltip>
+                <X
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 hover:text-destructive cursor-pointer"
                   onClick={(e) => handleFolderDelete(e, folder.id)}
-                  style={{ color: "#ccc", cursor: "pointer", fontSize: 16, lineHeight: 1, flexShrink: 0 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e53935")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#ccc")}
-                >
-                  ×
-                </span>
+                />
               </div>
 
-              {/* Tasks under folder */}
               {isExpanded && (
-                <div style={{ marginLeft: 16 }}>
+                <div className="ml-4">
                   {tasks.map((task) => {
                     const isSelected = selectedTaskId === task.id;
-                    const isWorking = workingTaskId === task.id;
+                    const isWorking = workingTaskIds.has(task.id);
+                    const isDone = doneTaskIds.has(task.id);
                     return (
                       <div
                         key={task.id}
                         onClick={() => onSelectTask(task)}
-                        style={{
-                          padding: "6px 12px",
-                          marginBottom: 2,
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: isSelected ? "#e3f2fd" : "transparent",
-                          fontSize: 13,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
+                        className={`flex items-center justify-between px-3 py-1.5 mb-0.5 rounded-md cursor-pointer text-[13px] ${
+                          isSelected ? "bg-primary/10" : "hover:bg-accent"
+                        }`}
                       >
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                          {task.name}
-                        </span>
+                        <span className="truncate flex-1">{task.name}</span>
                         {isWorking && (
-                          <span style={{ fontSize: 11, color: "#ff9800", marginLeft: 4 }}>working</span>
+                          <span className="text-[11px] text-orange-500 ml-1">working</span>
                         )}
-                        <span
+                        {isDone && !isWorking && (
+                          <span className="text-[11px] text-emerald-600 ml-1">done</span>
+                        )}
+                        <X
+                          className="h-3.5 w-3.5 ml-2 text-muted-foreground/30 hover:text-destructive cursor-pointer"
                           onClick={(e) => handleTaskDelete(e, task.id, folder.id)}
-                          style={{ marginLeft: 8, color: "#ccc", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "#e53935")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "#ccc")}
-                        >
-                          ×
-                        </span>
+                        />
                       </div>
                     );
                   })}
 
-                  {/* Inline add task form */}
                   {addingTaskForFolder === folder.id && (
-                    <div style={{ padding: "6px 0", display: "flex", gap: 4, alignItems: "center" }}>
-                      <input
+                    <div className="flex items-center gap-1 py-1.5">
+                      <Input
                         placeholder="任务名称"
                         value={newTaskName}
                         onChange={(e) => setNewTaskName(e.target.value)}
@@ -267,35 +207,24 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskId, onSel
                           if (e.key === "Escape") setAddingTaskForFolder(null);
                         }}
                         autoFocus
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          border: "1px solid #ddd",
-                          borderRadius: 4,
-                          fontSize: 12,
-                        }}
+                        className="h-7 text-xs"
                       />
-                      <button
+                      <Button
+                        size="sm"
                         onClick={handleTaskCreate}
                         disabled={creatingTask || !newTaskName.trim()}
-                        style={{
-                          padding: "4px 10px",
-                          border: "none",
-                          borderRadius: 4,
-                          background: creatingTask || !newTaskName.trim() ? "#ccc" : "#1976d2",
-                          color: "#fff",
-                          cursor: creatingTask ? "wait" : "pointer",
-                          fontSize: 12,
-                        }}
+                        className="h-7 text-xs px-2.5"
                       >
                         {creatingTask ? "..." : "确认"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => setAddingTaskForFolder(null)}
-                        style={{ padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, cursor: "pointer", fontSize: 12 }}
+                        className="h-7 text-xs px-2"
                       >
                         取消
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -305,66 +234,67 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskId, onSel
         })}
       </div>
 
-      {/* Create folder form */}
+      <Separator className="my-2" />
+
       {showFolderForm ? (
-        <div style={{ borderTop: "1px solid #e0e0e0", paddingTop: 12, marginTop: 8 }}>
-          <input
+        <div className="space-y-1.5 pt-2">
+          <Input
             placeholder="文件夹名称"
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
-            style={{ width: "100%", padding: "6px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 13, boxSizing: "border-box", marginBottom: 6 }}
+            className="h-8 text-sm"
           />
-          <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
-            <input
+          <div className="flex gap-1">
+            <Input
               placeholder="目录路径"
               value={folderPath}
               onChange={(e) => setFolderPath(e.target.value)}
-              style={{ flex: 1, padding: "6px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12 }}
+              className="h-8 flex-1 text-xs"
             />
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setShowFolderPicker(true)}
-              style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 4, background: "#f5f5f5", cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}
+              className="h-8 text-xs shrink-0"
             >
               浏览
-            </button>
+            </Button>
           </div>
-          <textarea
+          <Textarea
             placeholder="初始任务（每行一个，可选）"
             value={taskNames}
             onChange={(e) => setTaskNames(e.target.value)}
             rows={3}
-            style={{ width: "100%", padding: "6px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12, boxSizing: "border-box", marginBottom: 8, resize: "vertical" }}
+            className="text-xs resize-y"
           />
-          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-            <button
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => { setShowFolderForm(false); setFolderName(""); setFolderPath(""); setTaskNames(""); }}
-              style={{ padding: "4px 12px", border: "1px solid #ddd", borderRadius: 4, cursor: "pointer", fontSize: 12 }}
+              className="text-xs"
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               onClick={handleFolderCreate}
               disabled={creatingFolder || !folderName.trim() || !folderPath.trim()}
-              style={{
-                padding: "4px 12px", border: "none", borderRadius: 4,
-                background: creatingFolder || !folderName.trim() || !folderPath.trim() ? "#ccc" : "#1976d2",
-                color: "#fff", cursor: creatingFolder ? "wait" : "pointer", fontSize: 12,
-              }}
+              className="text-xs"
             >
               {creatingFolder ? "创建中..." : "创建"}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button
+        <Button
+          variant="outline"
           onClick={() => setShowFolderForm(true)}
-          style={{
-            marginTop: 8, width: "100%", padding: "6px", border: "1px dashed #ccc",
-            borderRadius: 4, background: "transparent", cursor: "pointer", fontSize: 14, color: "#999",
-          }}
+          className="mt-2 w-full border-dashed text-muted-foreground"
         >
-          + 新建文件夹
-        </button>
+          <Plus className="h-4 w-4 mr-1" />
+          新建文件夹
+        </Button>
       )}
 
       {showFolderPicker && (
