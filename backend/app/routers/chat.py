@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session, get_db
 from ..schemas.models import ChatRequest, PermissionDecision
 from ..services import claude_service
+from ..services.history import get_full_history as fetch_full_history
+from ..services.history import get_history as fetch_history
 from ..services.client_manager import client_manager
 
 router = APIRouter(prefix="/api")
@@ -21,7 +23,12 @@ async def get_session(task_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/messages/{task_id}")
 async def get_messages(task_id: str, db: AsyncSession = Depends(get_db)):
-    return await claude_service.get_history(db, task_id)
+    return await fetch_history(db, task_id)
+
+
+@router.get("/full-history/{task_id}")
+async def get_full_history(task_id: str, db: AsyncSession = Depends(get_db)):
+    return await fetch_full_history(db, task_id)
 
 
 @router.post("/chat")
