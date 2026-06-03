@@ -1,9 +1,8 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
-from ..schemas.models import FileInfo
+from ..schemas.models import FileInfo, FileContentResponse, PlanFile
 
 router = APIRouter(prefix="/api")
 
@@ -29,10 +28,6 @@ async def get_files(path: str = Query(...)):
     return result
 
 
-class FileContentResponse(BaseModel):
-    content: str
-
-
 @router.get("/files/content", response_model=FileContentResponse)
 async def get_file_content(path: str = Query(...)):
     target = Path(path).resolve()
@@ -41,12 +36,6 @@ async def get_file_content(path: str = Query(...)):
     if target.stat().st_size > 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large")
     return FileContentResponse(content=target.read_text(encoding="utf-8"))
-
-
-class PlanFile(BaseModel):
-    name: str
-    path: str
-    modified_at: str
 
 
 @router.get("/files/plans", response_model=list[PlanFile])
@@ -59,12 +48,12 @@ async def get_plan_files(folder_path: str = Query(...)):
         PlanFile(
             name=f.name,
             path=str(f),
-            modified_at=fmt_mtime(f.stat().st_mtime),
+            modified_at=_fmt_mtime(f.stat().st_mtime),
         )
         for f in md_files
     ]
 
 
-def fmt_mtime(ts: float) -> str:
+def _fmt_mtime(ts: float) -> str:
     from datetime import datetime
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
