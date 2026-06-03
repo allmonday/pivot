@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +20,8 @@ from .serializers import serialize_message
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger("cc-sdk")
 
 
 @dataclass
@@ -64,6 +67,7 @@ class TaskClientManager:
         client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool, mode="code", session_id=session_id))
         await client.connect()
         state.client = client
+        logger.info("Client created for task %s (session_id=%s)", task_id, session_id)
         return state
 
     async def send_query(
@@ -85,6 +89,7 @@ class TaskClientManager:
         state.done.clear()
         state.active_query = True
         state.mode = mode
+        logger.info("Query started for task %s (mode=%s)", task_id, mode)
 
         try:
             if images:
@@ -139,10 +144,12 @@ class TaskClientManager:
                             self._push_event(state, {"type": "plan_updated", "plan_paths": updated})
 
         except Exception as e:
+            logger.error("Query failed for task %s: %s", task_id, e)
             self._push_event(state, {"type": "error", "message": str(e)})
         finally:
             state.active_query = False
             state.done.set()
+            logger.info("Query finished for task %s", task_id)
             for q in state.queues:
                 q.put_nowait(None)
 
@@ -156,6 +163,7 @@ class TaskClientManager:
     async def interrupt(self, task_id: str) -> None:
         state = self._clients.get(task_id)
         if state and state.client and state.active_query:
+            logger.info("Interrupting task %s", task_id)
             await state.client.interrupt()
             for pending in state.pending_permissions.values():
                 pending.result = PermissionResultDeny(behavior="deny", message="Interrupted")
@@ -166,7 +174,10 @@ class TaskClientManager:
         state = self._clients.get(task_id)
         if state is None:
             return False
-        return _resolve_permission(state.pending_permissions, request_id, decision, message)
+        result = _resolve_permission(state.pending_permissions, request_id, decision, message)
+        if result:
+            logger.info("Permission %s for task %s: %s", request_id, task_id, decision)
+        return result
 
     def subscribe(self, task_id: str) -> asyncio.Queue:
         state = self._clients.get(task_id)
@@ -199,12 +210,15 @@ class TaskClientManager:
         state = self._clients.pop(task_id, None)
         if state and state.client:
             await state.client.disconnect()
+            logger.info("Client disconnected for task %s", task_id)
 
     async def shutdown_all(self) -> None:
         """Disconnect all active clients. Call on app shutdown."""
         task_ids = list(self._clients.keys())
         for tid in task_ids:
             await self.disconnect(tid)
+        if task_ids:
+            logger.info("Shutdown complete, disconnected %d client(s)", len(task_ids))
 
 
 # 全局单例

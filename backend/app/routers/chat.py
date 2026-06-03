@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -9,6 +10,7 @@ from ..schemas.models import ChatRequest
 from ..services import claude_service
 from ..services.client_manager import client_manager
 
+logger = logging.getLogger("cc-sdk")
 router = APIRouter(prefix="/api")
 
 
@@ -34,7 +36,7 @@ async def chat(req: ChatRequest):
                     images=[img.model_dump() for img in req.images],
                 )
         except Exception:
-            pass
+            logger.exception("Background query failed for task %s", req.task_id)
 
     asyncio.create_task(_run())
     return {"task_id": req.task_id}
@@ -81,6 +83,15 @@ async def stream_sse(task_id: str):
 @router.get("/active-stream/{task_id}")
 async def active_stream(task_id: str):
     return {"active": client_manager.is_active(task_id)}
+
+
+@router.get("/active-streams")
+async def active_streams(ids: str = ""):
+    if not ids:
+        return {"active_ids": []}
+    task_ids = [tid.strip() for tid in ids.split(",") if tid.strip()]
+    active = [tid for tid in task_ids if client_manager.is_active(tid)]
+    return {"active_ids": active}
 
 
 @router.post("/interrupt/{task_id}")
