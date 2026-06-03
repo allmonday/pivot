@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ContentBlock, ResultInfo, PermissionRequest, ImageAttachment } from "../types";
+import type { ChatMessage, ContentBlock, ImageAttachment } from "../types";
 import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission } from "../api";
+import { useStreamEvents } from "../hooks/useStreamEvents";
 import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
 import { Button } from "@/components/ui/button";
@@ -50,32 +51,38 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
 }
 
 export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [streamContent, setStreamContent] = useState<ContentBlock[]>([]);
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
-  const [resultInfo, setResultInfo] = useState<ResultInfo | null>(null);
-  const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null);
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
-  const accumulatedRef = useRef<ContentBlock[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const {
+    messages,
+    setMessages,
+    streamContent,
+    streaming,
+    setStreaming,
+    resultInfo,
+    pendingPermission,
+    setPendingPermission,
+    accumulatedRef,
+    handleEvent,
+    resetStreamState,
+  } = useStreamEvents();
+
+  // Sync initialMessages into the hook
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setStreaming(false);
-    setStreamContent([]);
-    accumulatedRef.current = [];
-    setResultInfo(null);
-    setPendingPermission(null);
+    resetStreamState();
     setMessages(initialMessages);
   }, [initialMessages]);
 
+  // Reconnect to active stream on taskId change
   useEffect(() => {
     let cancelled = false;
     checkActiveStream(taskId).then((res) => {
@@ -84,56 +91,12 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         setReconnecting(true);
         setStreaming(true);
         onStreamingChange(true);
-        setStreamContent([]);
-        accumulatedRef.current = [];
+        resetStreamState();
+        setStreaming(true);
 
         abortRef.current = reconnectStream(
           taskId,
-          (eventType, data) => {
-            if (eventType === "assistant") {
-              const content = (data.content as ContentBlock[]).filter(
-                (b) => b.kind !== "thinking"
-              );
-              accumulatedRef.current = [...accumulatedRef.current, ...content];
-              setStreamContent([...accumulatedRef.current]);
-            }
-            if (eventType === "result") {
-              if (data.session_id) {
-                onSessionIdChange(data.session_id as string);
-              }
-              setResultInfo({
-                total_cost_usd: (data.total_cost_usd as number) ?? null,
-                duration_ms: (data.duration_ms as number) ?? null,
-                duration_api_ms: (data.duration_api_ms as number) ?? null,
-                num_turns: (data.num_turns as number) ?? null,
-              });
-              setPendingPermission(null);
-              const final = accumulatedRef.current;
-              if (final.length > 0) {
-                setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
-              }
-              accumulatedRef.current = [];
-              setStreamContent([]);
-              setStreaming(false);
-              setReconnecting(false);
-              onStreamingChange(false);
-            }
-            if (eventType === "error") {
-              setMessages((msgs) => [
-                ...msgs,
-                {
-                  role: "assistant",
-                  content: [{ kind: "text", text: `Error: ${data.message}` }],
-                },
-              ]);
-              setStreaming(false);
-              setReconnecting(false);
-              onStreamingChange(false);
-            }
-            if (eventType === "permission_request") {
-              setPendingPermission(data as unknown as PermissionRequest);
-            }
-          },
+          handleEvent,
           (err) => {
             console.error("Reconnect error:", err);
             setStreaming(false);
@@ -180,61 +143,23 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     }
     const userMsg: ChatMessage = { role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
-    setResultInfo(null);
-    setPendingPermission(null);
+    resetStreamState();
     setStreaming(true);
     onStreamingChange(true);
-    setStreamContent([]);
-    accumulatedRef.current = [];
+
+    const onEvent = (eventType: string, data: Record<string, unknown>) => {
+      if (eventType === "result" && data.session_id) {
+        onSessionIdChange(data.session_id as string);
+      }
+      handleEvent(eventType, data);
+    };
 
     abortRef.current = sendChat(
       taskId,
       text,
       sessionId,
       mode,
-      (eventType, data) => {
-        if (eventType === "assistant") {
-          const content = (data.content as ContentBlock[]).filter(
-            (b) => b.kind !== "thinking"
-          );
-          accumulatedRef.current = [...accumulatedRef.current, ...content];
-          setStreamContent([...accumulatedRef.current]);
-        }
-        if (eventType === "result") {
-          if (data.session_id) {
-            onSessionIdChange(data.session_id as string);
-          }
-          setResultInfo({
-            total_cost_usd: (data.total_cost_usd as number) ?? null,
-            duration_ms: (data.duration_ms as number) ?? null,
-            duration_api_ms: (data.duration_api_ms as number) ?? null,
-            num_turns: (data.num_turns as number) ?? null,
-          });
-          setPendingPermission(null);
-          const final = accumulatedRef.current;
-          if (final.length > 0) {
-            setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
-          }
-          accumulatedRef.current = [];
-          setStreamContent([]);
-          setStreaming(false);
-          onStreamingChange(false);
-        }
-        if (eventType === "error") {
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              role: "assistant",
-              content: [{ kind: "text", text: `Error: ${data.message}` }],
-            },
-          ]);
-          setStreaming(false);
-          onStreamingChange(false);
-        }
-        if (eventType === "permission_request") {
-          setPendingPermission(data as unknown as PermissionRequest);
-        }
-      },
+      onEvent,
       (err) => {
         console.error(err);
         setStreaming(false);
@@ -274,8 +199,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
     }
     accumulatedRef.current = [];
-    setStreamContent([]);
-    setStreaming(false);
+    resetStreamState();
     onStreamingChange(false);
   };
 

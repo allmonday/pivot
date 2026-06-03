@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import type { Task, Folder, ChatMessage } from "./types";
+import type { Task, Folder } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
-import { fetchFolders, fetchTasks, fetchSession, fetchMessages, checkActiveStreams } from "./api";
+import { fetchFolders, fetchTasks } from "./api";
+import { useChatSession } from "./hooks/useChatSession";
+import { useTaskActivity } from "./hooks/useTaskActivity";
+import { useLayout } from "./hooks/useLayout";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -26,15 +29,10 @@ function setParamsInUrl(folderId: string | null, taskId: string | null) {
 export default function App() {
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([]);
-  const [workingTaskIds, setWorkingTaskIds] = useState<Set<string>>(new Set());
-  const [doneTaskIds, setDoneTaskIds] = useState<Set<string>>(new Set());
-  const [planVisible, setPlanVisible] = useState(false);
-  const [planRefreshKey, setPlanRefreshKey] = useState(0);
-  const [planWidth, setPlanWidth] = useState(400);
-  const [historyVisible, setHistoryVisible] = useState(false);
-  const [historyWidth, setHistoryWidth] = useState(500);
+
+  const chatSession = useChatSession();
+  const activity = useTaskActivity(selectedTask?.id ?? null);
+  const layout = useLayout();
 
   const handleFolderSelect = (folder: Folder) => {
     setParamsInUrl(folder.id, null);
@@ -49,64 +47,30 @@ export default function App() {
     }
 
     setParamsInUrl(task.folder_id, task.id);
-    setDoneTaskIds((prev) => { if (!prev.has(task.id)) return prev; const n = new Set(prev); n.delete(task.id); return n; });
+    activity.clearDone(task.id);
     setSelectedTask(task);
-    setPlanVisible(task.plan_paths.length > 0);
-    const [existing, history] = await Promise.all([
-      fetchSession(task.id).catch(() => null),
-      fetchMessages(task.id).catch(() => []),
-    ]);
-    setSessionId(existing);
-    setInitialMessages(history);
+    layout.setPlanVisible(task.plan_paths.length > 0);
+    await chatSession.loadSession(task.id);
   };
 
   const handleStreamingChange = (taskId: string, streaming: boolean) => {
     if (streaming) {
-      setWorkingTaskIds((prev) => { const n = new Set(prev); n.add(taskId); return n; });
-      setDoneTaskIds((prev) => { if (!prev.has(taskId)) return prev; const n = new Set(prev); n.delete(taskId); return n; });
+      activity.markWorking(taskId);
     } else {
-      setWorkingTaskIds((prev) => { const n = new Set(prev); n.delete(taskId); return n; });
-      setDoneTaskIds((prev) => { const n = new Set(prev); n.add(taskId); return n; });
-    }
-    if (!streaming) {
-      setPlanRefreshKey((k) => k + 1);
+      activity.markDone(taskId);
       if (selectedTask) {
         fetchTasks().then((tasks) => {
           const updated = tasks.find((t) => t.id === selectedTask.id);
           if (updated && updated.plan_paths.length > selectedTask.plan_paths.length) {
             setSelectedTask(updated);
-            setPlanVisible(true);
+            layout.setPlanVisible(true);
           }
         });
       }
     }
   };
 
-  // Poll background tasks' active stream status (skip current task, tracked by ChatPanel)
-  useEffect(() => {
-    const bgIds = [...workingTaskIds].filter((id) => id !== selectedTask?.id);
-    if (bgIds.length === 0) return;
-    const timer = setInterval(() => {
-      checkActiveStreams(bgIds).then(({ active_ids }) => {
-        const activeSet = new Set(active_ids);
-        const finished = bgIds.filter((id) => !activeSet.has(id));
-        if (finished.length > 0) {
-          setWorkingTaskIds((prev) => {
-            const next = new Set(prev);
-            for (const id of finished) next.delete(id);
-            return next;
-          });
-          setDoneTaskIds((prev) => {
-            const next = new Set(prev);
-            for (const id of finished) next.add(id);
-            return next;
-          });
-        }
-      });
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [workingTaskIds, selectedTask?.id]);
-
+  // Restore state from URL params on mount
   useEffect(() => {
     const { folderId, taskId } = getParamsFromUrl();
     if (!folderId && !taskId) return;
@@ -124,17 +88,12 @@ export default function App() {
             if (folder) setSelectedFolder(folder);
           }
           setSelectedTask(task);
-          setPlanVisible(task.plan_paths.length > 0);
-          Promise.all([
-            fetchSession(task.id).catch(() => null),
-            fetchMessages(task.id).catch(() => []),
-          ]).then(([existing, history]) => {
-            setSessionId(existing);
-            setInitialMessages(history);
-          });
+          layout.setPlanVisible(task.plan_paths.length > 0);
+          chatSession.loadSession(task.id);
         }
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -143,8 +102,8 @@ export default function App() {
         <Sidebar
           selectedFolderId={selectedFolder?.id ?? null}
           selectedTaskId={selectedTask?.id ?? null}
-          workingTaskIds={workingTaskIds}
-          doneTaskIds={doneTaskIds}
+          workingTaskIds={activity.workingTaskIds}
+          doneTaskIds={activity.doneTaskIds}
           onSelectFolder={handleFolderSelect}
           onSelectTask={handleTaskSelect}
         />
@@ -156,27 +115,27 @@ export default function App() {
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <ChatPanel
                 taskId={selectedTask.id}
-                sessionId={sessionId}
-                initialMessages={initialMessages}
-                onSessionIdChange={setSessionId}
+                sessionId={chatSession.sessionId}
+                initialMessages={chatSession.initialMessages}
+                onSessionIdChange={chatSession.setSessionId}
                 onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
-                planVisible={planVisible}
-                onTogglePlan={() => setPlanVisible(!planVisible)}
+                planVisible={layout.planVisible}
+                onTogglePlan={layout.togglePlan}
                 hasPlan={selectedTask.plan_paths.length > 0}
-                historyVisible={historyVisible}
-                onToggleHistory={() => setHistoryVisible(!historyVisible)}
+                historyVisible={layout.historyVisible}
+                onToggleHistory={layout.toggleHistory}
               />
             </div>
-            {planVisible && (
+            {layout.planVisible && (
               <div
                 className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startX = e.clientX;
-                  const startWidth = planWidth;
+                  const startWidth = layout.planWidth;
                   const onMove = (ev: MouseEvent) => {
                     const delta = startX - ev.clientX;
-                    setPlanWidth(Math.max(250, Math.min(800, startWidth + delta)));
+                    layout.setPlanWidth(Math.max(250, Math.min(800, startWidth + delta)));
                   };
                   const onUp = () => {
                     document.removeEventListener("mousemove", onMove);
@@ -190,21 +149,21 @@ export default function App() {
             <PlanPanel
               planPaths={selectedTask.plan_paths}
               folderPath={selectedFolder?.folder_path ?? null}
-              visible={planVisible}
-              onClose={() => setPlanVisible(false)}
-              refreshKey={planRefreshKey}
-              width={planWidth}
+              visible={layout.planVisible}
+              onClose={layout.closePlan}
+              refreshKey={activity.planRefreshKey}
+              width={layout.planWidth}
             />
-            {historyVisible && (
+            {layout.historyVisible && (
               <div
                 className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startX = e.clientX;
-                  const startWidth = historyWidth;
+                  const startWidth = layout.historyWidth;
                   const onMove = (ev: MouseEvent) => {
                     const delta = startX - ev.clientX;
-                    setHistoryWidth(Math.max(300, Math.min(800, startWidth + delta)));
+                    layout.setHistoryWidth(Math.max(300, Math.min(800, startWidth + delta)));
                   };
                   const onUp = () => {
                     document.removeEventListener("mousemove", onMove);
@@ -217,9 +176,9 @@ export default function App() {
             )}
             <HistoryPanel
               taskId={selectedTask.id}
-              visible={historyVisible}
-              onClose={() => setHistoryVisible(false)}
-              width={historyWidth}
+              visible={layout.historyVisible}
+              onClose={layout.closeHistory}
+              width={layout.historyWidth}
             />
           </div>
         ) : (
