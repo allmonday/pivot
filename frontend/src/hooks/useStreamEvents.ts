@@ -26,9 +26,7 @@ export function useStreamEvents(): UseStreamEventsReturn {
 
   const handleEvent = useCallback((eventType: string, data: Record<string, unknown>) => {
     if (eventType === "assistant") {
-      const content = (data.content as ContentBlock[]).filter(
-        (b) => b.kind !== "thinking"
-      );
+      const content = data.content as ContentBlock[];
       accumulatedRef.current = [...accumulatedRef.current, ...content];
       setStreamContent([...accumulatedRef.current]);
     }
