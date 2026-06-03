@@ -46,6 +46,7 @@ class TaskClientManager:
         self,
         task_id: str,
         folder_path: str,
+        session_id: str | None = None,
     ) -> ClientState:
         if task_id in self._clients:
             state = self._clients[task_id]
@@ -60,7 +61,7 @@ class TaskClientManager:
             get_state=self._get_state,
             push_event=self._push_event,
         )
-        client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool))
+        client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool, mode="code", session_id=session_id))
         await client.connect()
         state.client = client
         return state
@@ -198,6 +199,12 @@ class TaskClientManager:
         state = self._clients.pop(task_id, None)
         if state and state.client:
             await state.client.disconnect()
+
+    async def shutdown_all(self) -> None:
+        """Disconnect all active clients. Call on app shutdown."""
+        task_ids = list(self._clients.keys())
+        for tid in task_ids:
+            await self.disconnect(tid)
 
 
 # 全局单例

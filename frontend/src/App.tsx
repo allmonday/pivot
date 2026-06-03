@@ -3,6 +3,7 @@ import type { Task, Folder, ChatMessage } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { fetchFolders, fetchTasks, fetchSession, fetchMessages, checkActiveStream } from "./api";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
@@ -32,6 +33,8 @@ export default function App() {
   const [planVisible, setPlanVisible] = useState(false);
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
   const [planWidth, setPlanWidth] = useState(400);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyWidth, setHistoryWidth] = useState(500);
 
   const handleFolderSelect = (folder: Folder) => {
     setParamsInUrl(folder.id, null);
@@ -157,6 +160,8 @@ export default function App() {
                 planVisible={planVisible}
                 onTogglePlan={() => setPlanVisible(!planVisible)}
                 hasPlan={selectedTask.plan_paths.length > 0}
+                historyVisible={historyVisible}
+                onToggleHistory={() => setHistoryVisible(!historyVisible)}
               />
             </div>
             {planVisible && (
@@ -186,6 +191,32 @@ export default function App() {
               onClose={() => setPlanVisible(false)}
               refreshKey={planRefreshKey}
               width={planWidth}
+            />
+            {historyVisible && (
+              <div
+                className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startX = e.clientX;
+                  const startWidth = historyWidth;
+                  const onMove = (ev: MouseEvent) => {
+                    const delta = startX - ev.clientX;
+                    setHistoryWidth(Math.max(300, Math.min(800, startWidth + delta)));
+                  };
+                  const onUp = () => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                  };
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
+                }}
+              />
+            )}
+            <HistoryPanel
+              taskId={selectedTask.id}
+              visible={historyVisible}
+              onClose={() => setHistoryVisible(false)}
+              width={historyWidth}
             />
           </div>
         ) : (

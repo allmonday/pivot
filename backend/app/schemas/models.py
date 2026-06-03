@@ -54,3 +54,13 @@ class ChatRequest(BaseModel):
 class PermissionDecision(BaseModel):
     decision: Literal["allow", "deny"]
     message: str = ""
+
+
+class FileContentResponse(BaseModel):
+    content: str
+
+
+class PlanFile(BaseModel):
+    name: str
+    path: str
+    modified_at: str
