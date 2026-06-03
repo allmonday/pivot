@@ -42,7 +42,7 @@ export function useStreamEvents(): UseStreamEventsReturn {
       setPendingPermission(null);
       const final = accumulatedRef.current;
       if (final.length > 0) {
-        setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
+        setMessages((msgs) => [...msgs, { id: crypto.randomUUID(), role: "assistant", content: final }]);
       }
       accumulatedRef.current = [];
       setStreamContent([]);
@@ -52,6 +52,7 @@ export function useStreamEvents(): UseStreamEventsReturn {
       setMessages((msgs) => [
         ...msgs,
         {
+          id: crypto.randomUUID(),
           role: "assistant",
           content: [{ kind: "text", text: `Error: ${data.message}` }],
         },

@@ -54,8 +54,8 @@ export function HistoryPanel({ taskId, visible, onClose, width }: Props) {
         ) : messages.length === 0 ? (
           <div className="text-muted-foreground text-[13px]">No history available</div>
         ) : (
-          messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
+          messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
           ))
         )}
       </div>

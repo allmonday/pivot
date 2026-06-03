@@ -141,7 +141,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         text: img.name,
       });
     }
-    const userMsg: ChatMessage = { role: "user", content };
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
     resetStreamState();
     setStreaming(true);
@@ -196,7 +196,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     await interruptStream(taskId);
     const final = accumulatedRef.current;
     if (final.length > 0) {
-      setMessages((msgs) => [...msgs, { role: "assistant", content: final }]);
+      setMessages((msgs) => [...msgs, { id: crypto.randomUUID(), role: "assistant", content: final }]);
     }
     accumulatedRef.current = [];
     resetStreamState();
@@ -259,9 +259,9 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-3xl mx-auto px-6 py-6 pb-4">
-          {messages.map((msg, i) => (
+          {messages.map((msg) => (
             <MessageBubble
-              key={i}
+              key={msg.id}
               message={msg}
               onSelectOption={stableOnSelectOption}
             />
