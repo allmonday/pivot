@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { ChevronDown, ChevronRight, Plus, X, Info } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X, Info, FolderIcon, FileText } from "lucide-react";
 
 interface Props {
   selectedFolderId: string | null;
@@ -129,7 +129,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
 
   return (
     <div className="p-4 flex flex-col h-full">
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Folders</h3>
+      <h3 className="mb-3 text-[15px] font-semibold text-muted-foreground tracking-wide">工作区</h3>
 
       <div className="flex-1 overflow-auto scrollbar-thin">
         {folders.map((folder) => {
@@ -138,16 +138,17 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
           return (
             <div key={folder.id}>
               <div
-                className={`group flex items-center gap-1 rounded-md px-3 py-2 mb-0.5 cursor-pointer text-[13px] hover:bg-accent ${
-                  selectedFolderId === folder.id ? "bg-accent font-medium" : ""
+                className={`group flex items-center gap-2 rounded-lg px-3 py-2 mb-0.5 cursor-pointer text-[14px] font-medium hover:bg-accent ${
+                  selectedFolderId === folder.id ? "bg-accent" : ""
                 }`}
                 onClick={() => handleFolderClick(folder)}
               >
                 {isExpanded ? (
-                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
+                <FolderIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="truncate flex-1">{folder.name}</span>
                 <Plus
                   className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer"
@@ -168,7 +169,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
               </div>
 
               {isExpanded && (
-                <div className="ml-4">
+                <div className="ml-5 pl-2 border-l border-border/60">
                   {tasks.map((task) => {
                     const isSelected = selectedTaskId === task.id;
                     const isWorking = workingTaskIds.has(task.id);
@@ -177,19 +178,20 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
                       <div
                         key={task.id}
                         onClick={() => onSelectTask(task)}
-                        className={`flex items-center justify-between px-3 py-1.5 mb-0.5 rounded-md cursor-pointer text-[13px] ${
-                          isSelected ? "bg-primary/10" : "hover:bg-accent"
+                        className={`flex items-center gap-2 px-2.5 py-1.5 mb-0.5 rounded-md cursor-pointer text-[13px] font-normal ${
+                          isSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                         }`}
                       >
+                        <FileText className="h-3.5 w-3.5 shrink-0 opacity-50" />
                         <span className="truncate flex-1">{task.name}</span>
                         {isWorking && (
-                          <span className="text-[11px] text-orange-500 ml-1">working</span>
+                          <span className="text-[11px] text-orange-500 font-medium ml-1">working</span>
                         )}
                         {isDone && !isWorking && (
-                          <span className="text-[11px] text-emerald-600 ml-1">done</span>
+                          <span className="text-[11px] text-emerald-600 font-medium ml-1">done</span>
                         )}
                         <X
-                          className="h-3.5 w-3.5 ml-2 text-muted-foreground/30 hover:text-destructive cursor-pointer"
+                          className="h-3 w-3 shrink-0 text-muted-foreground/30 hover:text-destructive cursor-pointer"
                           onClick={(e) => handleTaskDelete(e, task.id, folder.id)}
                         />
                       </div>

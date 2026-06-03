@@ -85,6 +85,8 @@ def _serialize_raw_content(content: Any) -> list[dict]:
             result.append({"kind": "tool_result", "content": str(tc)})
         elif btype == "thinking":
             result.append({"kind": "thinking", "text": block.get("thinking", "")})
+        elif btype == "image":
+            result.append({"kind": "image", "source": block.get("source")})
     return result
 
 
@@ -147,8 +149,18 @@ async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
 
     result: list[dict] = []
     for block in blocks:
-        if block["role"] == "user" and block.get("kind") == "text":
-            result.append({"role": "user", "content": [{"kind": "text", "text": block["text"]}]})
+        if block["role"] == "user":
+            kind = block.get("kind", "unknown")
+            if kind == "text":
+                result.append({"role": "user", "content": [{"kind": "text", "text": block["text"]}]})
+            elif kind == "image":
+                if result and result[-1]["role"] == "user":
+                    result[-1]["content"].append({"kind": "image", "source": block.get("source")})
+                else:
+                    result.append({"role": "user", "content": [{"kind": "image", "source": block.get("source")}]})
+            elif kind == "tool_result":
+                if result and result[-1]["role"] == "assistant":
+                    result[-1]["content"].append({"kind": "tool_result", "content": block.get("content", "")})
         elif block["role"] == "assistant":
             kind = block.get("kind", "unknown")
             if kind == "thinking":
@@ -157,9 +169,6 @@ async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
                 result[-1]["content"].append({k: v for k, v in block.items() if k != "role"})
             else:
                 result.append({"role": "assistant", "content": [{k: v for k, v in block.items() if k != "role"}]})
-        elif block["role"] == "user" and block.get("kind") == "tool_result":
-            if result and result[-1]["role"] == "assistant":
-                result[-1]["content"].append({"kind": "tool_result", "content": block.get("content", "")})
 
     return result
 

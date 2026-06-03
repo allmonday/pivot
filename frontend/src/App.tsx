@@ -79,12 +79,12 @@ export default function App() {
     }
   };
 
-  // Poll background tasks' active stream status
+  // Poll background tasks' active stream status (skip current task, tracked by ChatPanel)
   useEffect(() => {
-    const ids = workingTaskIds;
-    if (ids.size === 0) return;
+    const bgIds = [...workingTaskIds].filter((id) => id !== selectedTask?.id);
+    if (bgIds.length === 0) return;
     const timer = setInterval(() => {
-      ids.forEach((id) => {
+      bgIds.forEach((id) => {
         checkActiveStream(id).then((res) => {
           if (!res.active) {
             setWorkingTaskIds((prev) => {
@@ -99,7 +99,7 @@ export default function App() {
       });
     }, 5000);
     return () => clearInterval(timer);
-  }, [workingTaskIds]);
+  }, [workingTaskIds, selectedTask?.id]);
 
   useEffect(() => {
     const { folderId, taskId } = getParamsFromUrl();
@@ -133,7 +133,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen font-sans">
-      <div className="w-[260px] border-r border-border overflow-auto bg-muted/50 shrink-0">
+      <div className="w-[280px] border-r border-border overflow-auto bg-muted/50 shrink-0">
         <Sidebar
           selectedFolderId={selectedFolder?.id ?? null}
           selectedTaskId={selectedTask?.id ?? null}
