@@ -1,71 +1,24 @@
 from __future__ import annotations
 
 import json
-
 import asyncio
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
 from claude_agent_sdk import (
-    ClaudeAgentOptions,
     ClaudeSDKClient,
-    AssistantMessage,
-    PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
-    ToolPermissionContext,
-    create_sdk_mcp_server,
-    tool,
 )
 
 from ..models import SessionORM, TaskORM
-from .claude_service import _serialize_message, _detect_new_plans
+from .mcp_tools import build_options
+from .permissions import make_can_use_tool, resolve_permission as _resolve_permission
+from .plan import detect_new_plans
+from .serializers import serialize_message
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
-# --- In-process MCP tool ---
-@tool(
-    "present_options",
-    "Present choices for user to select. Use this when you need the user to pick from multiple options.",
-    {"question": str, "options": list[str]},
-)
-async def _present_options(args: dict) -> dict:
-    return {"content": [{"type": "text", "text": "Options presented. Awaiting user response."}]}
-
-
-_ui_mcp = create_sdk_mcp_server("ui_tools", tools=[_present_options])
-
-
-def _build_options(folder_path: str, can_use_tool=None) -> ClaudeAgentOptions:
-    return ClaudeAgentOptions(
-        cwd=folder_path,
-        allowed_tools=["Read", "Glob", "Grep", "Bash", "Write", "Edit", "MultiEdit", "present_options"],
-        mcp_servers={"ui_tools": _ui_mcp},
-        can_use_tool=can_use_tool,
-        system_prompt={
-            "type": "preset",
-            "preset": "claude_code",
-            "append": (
-                "When you need the user to choose between multiple options or approaches, "
-                "call the present_options tool with the question and option list. "
-                "After calling this tool, briefly summarize and wait for the user's choice."
-            ),
-        },
-    )
-
-
-@dataclass
-class PendingPermission:
-    request_id: str
-    tool_name: str
-    title: str | None
-    description: str | None
-    blocked_path: str | None
-    event: asyncio.Event = field(default_factory=asyncio.Event)
-    result: PermissionResultAllow | PermissionResultDeny | None = None
 
 
 @dataclass
@@ -77,7 +30,7 @@ class ClientState:
     active_query: bool = False
     done: asyncio.Event = field(default_factory=asyncio.Event)
     mode: str = "code"
-    pending_permissions: dict[str, PendingPermission] = field(default_factory=dict)
+    pending_permissions: dict = field(default_factory=dict)
 
 
 class TaskClientManager:
@@ -86,48 +39,8 @@ class TaskClientManager:
     def __init__(self) -> None:
         self._clients: dict[str, ClientState] = {}
 
-    def _make_can_use_tool(self, task_id: str):
-        async def _can_use_tool(
-            tool_name: str,
-            tool_input: dict,
-            context: ToolPermissionContext,
-        ) -> PermissionResultAllow | PermissionResultDeny:
-            state = self._clients.get(task_id)
-            if state is None:
-                return PermissionResultDeny(behavior="deny", message="Client disconnected")
-
-            request_id = context.tool_use_id or uuid.uuid4().hex
-            pending = PendingPermission(
-                request_id=request_id,
-                tool_name=tool_name,
-                title=context.title,
-                description=context.description,
-                blocked_path=context.blocked_path,
-            )
-            state.pending_permissions[request_id] = pending
-
-            self._push_event(state, {
-                "type": "permission_request",
-                "request_id": request_id,
-                "tool_name": tool_name,
-                "tool_input": tool_input,
-                "title": context.title,
-                "display_name": context.display_name,
-                "description": context.description,
-                "blocked_path": context.blocked_path,
-                "decision_reason": context.decision_reason,
-            })
-
-            try:
-                await asyncio.wait_for(pending.event.wait(), timeout=300)
-            except asyncio.TimeoutError:
-                state.pending_permissions.pop(request_id, None)
-                return PermissionResultDeny(behavior="deny", message="Permission request timed out")
-
-            state.pending_permissions.pop(request_id, None)
-            return pending.result
-
-        return _can_use_tool
+    def _get_state(self, task_id: str) -> ClientState | None:
+        return self._clients.get(task_id)
 
     async def get_or_create(
         self,
@@ -139,12 +52,15 @@ class TaskClientManager:
             if state.client is not None:
                 return state
 
-        # 先创建 state 占位，闭包通过 task_id 延迟查找
         state = ClientState(client=None, folder_path=folder_path)
         self._clients[task_id] = state
 
-        can_use_tool = self._make_can_use_tool(task_id)
-        client = ClaudeSDKClient(options=_build_options(folder_path, can_use_tool))
+        can_use_tool = make_can_use_tool(
+            task_id,
+            get_state=self._get_state,
+            push_event=self._push_event,
+        )
+        client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool))
         await client.connect()
         state.client = client
         return state
@@ -164,7 +80,6 @@ class TaskClientManager:
         if state.active_query:
             raise RuntimeError(f"Query already active for task {task_id}")
 
-        # 清空旧事件缓冲
         state.events.clear()
         state.done.clear()
         state.active_query = True
@@ -172,7 +87,6 @@ class TaskClientManager:
 
         try:
             if images:
-                # Build AsyncIterable with image content blocks
                 async def _prompt_iterable():
                     content: list[dict[str, Any]] = []
                     if prompt:
@@ -196,7 +110,6 @@ class TaskClientManager:
                 await state.client.query(prompt)
 
             async for message in state.client.receive_response():
-                # 持久化 session_id
                 if isinstance(message, ResultMessage) and message.session_id:
                     result = await db.execute(
                         select(SessionORM).where(SessionORM.task_id == task_id)
@@ -208,19 +121,18 @@ class TaskClientManager:
                         db.add(SessionORM(task_id=task_id, session_id=message.session_id))
                     await db.commit()
 
-                serialized = _serialize_message(message)
+                serialized = serialize_message(message)
                 if serialized is not None:
                     self._push_event(state, serialized)
 
-                # Plan mode: detect new plan files on result
                 if isinstance(message, ResultMessage) and mode == "plan":
                     result = await db.execute(select(TaskORM).where(TaskORM.id == task_id))
                     task_orm = result.scalar_one_or_none()
                     if task_orm:
-                        existing = json.loads(task_orm.plan_paths or "[]")
-                        new_plans = _detect_new_plans(state.folder_path, existing)
+                        existing_paths = json.loads(task_orm.plan_paths or "[]")
+                        new_plans = detect_new_plans(state.folder_path, existing_paths)
                         if new_plans:
-                            updated = existing + new_plans
+                            updated = existing_paths + new_plans
                             task_orm.plan_paths = json.dumps(updated, ensure_ascii=False)
                             await db.commit()
                             self._push_event(state, {"type": "plan_updated", "plan_paths": updated})
@@ -230,7 +142,6 @@ class TaskClientManager:
         finally:
             state.active_query = False
             state.done.set()
-            # 向订阅者发送结束哨兵
             for q in state.queues:
                 q.put_nowait(None)
 
@@ -245,7 +156,6 @@ class TaskClientManager:
         state = self._clients.get(task_id)
         if state and state.client and state.active_query:
             await state.client.interrupt()
-            # 清理所有 pending permissions
             for pending in state.pending_permissions.values():
                 pending.result = PermissionResultDeny(behavior="deny", message="Interrupted")
                 pending.event.set()
@@ -255,15 +165,7 @@ class TaskClientManager:
         state = self._clients.get(task_id)
         if state is None:
             return False
-        pending = state.pending_permissions.get(request_id)
-        if pending is None:
-            return False
-        if decision == "allow":
-            pending.result = PermissionResultAllow(behavior="allow")
-        else:
-            pending.result = PermissionResultDeny(behavior="deny", message=message)
-        pending.event.set()
-        return True
+        return _resolve_permission(state.pending_permissions, request_id, decision, message)
 
     def subscribe(self, task_id: str) -> asyncio.Queue:
         state = self._clients.get(task_id)
