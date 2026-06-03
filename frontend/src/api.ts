@@ -239,6 +239,14 @@ export async function checkActiveStream(taskId: string): Promise<{ active: boole
   return res.json();
 }
 
+// 批量检查活跃 streams
+export async function checkActiveStreams(taskIds: string[]): Promise<{ active_ids: string[] }> {
+  if (taskIds.length === 0) return { active_ids: [] };
+  const res = await fetch(`${BASE}/active-streams?ids=${taskIds.join(",")}`);
+  if (!res.ok) return { active_ids: [] };
+  return res.json();
+}
+
 // 中断活跃 stream
 export async function interruptStream(taskId: string): Promise<void> {
   await fetch(`${BASE}/interrupt/${taskId}`, { method: "POST" });

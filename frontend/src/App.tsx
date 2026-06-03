@@ -4,7 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
-import { fetchFolders, fetchTasks, fetchSession, fetchMessages, checkActiveStream } from "./api";
+import { fetchFolders, fetchTasks, fetchSession, fetchMessages, checkActiveStreams } from "./api";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -87,18 +87,21 @@ export default function App() {
     const bgIds = [...workingTaskIds].filter((id) => id !== selectedTask?.id);
     if (bgIds.length === 0) return;
     const timer = setInterval(() => {
-      bgIds.forEach((id) => {
-        checkActiveStream(id).then((res) => {
-          if (!res.active) {
-            setWorkingTaskIds((prev) => {
-              if (!prev.has(id)) return prev;
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
-            setDoneTaskIds((prev) => { const n = new Set(prev); n.add(id); return n; });
-          }
-        });
+      checkActiveStreams(bgIds).then(({ active_ids }) => {
+        const activeSet = new Set(active_ids);
+        const finished = bgIds.filter((id) => !activeSet.has(id));
+        if (finished.length > 0) {
+          setWorkingTaskIds((prev) => {
+            const next = new Set(prev);
+            for (const id of finished) next.delete(id);
+            return next;
+          });
+          setDoneTaskIds((prev) => {
+            const next = new Set(prev);
+            for (const id of finished) next.add(id);
+            return next;
+          });
+        }
       });
     }, 5000);
     return () => clearInterval(timer);
