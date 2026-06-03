@@ -234,22 +234,6 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     <div className="chat-panel">
       {/* Header bar */}
       <div className="chat-header">
-        <div className="chat-mode-toggle">
-          <button
-            className={`chat-mode-btn ${mode === "plan" ? "chat-mode-btn--active-plan" : ""}`}
-            onClick={() => setMode("plan")}
-            disabled={streaming}
-          >
-            Plan
-          </button>
-          <button
-            className={`chat-mode-btn ${mode === "code" ? "chat-mode-btn--active-code" : ""}`}
-            onClick={() => setMode("code")}
-            disabled={streaming}
-          >
-            Code
-          </button>
-        </div>
         <span className="chat-session-id">
           session: {sessionId ? sessionId.slice(0, 8) + "..." : "new"}
         </span>
@@ -345,6 +329,22 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
 
       {/* Input */}
       <div className="chat-input-area">
+        <div className="chat-mode-toggle">
+          <button
+            className={`chat-mode-btn ${mode === "plan" ? "chat-mode-btn--active-plan" : ""}`}
+            onClick={() => setMode("plan")}
+            disabled={streaming}
+          >
+            Plan
+          </button>
+          <button
+            className={`chat-mode-btn ${mode === "code" ? "chat-mode-btn--active-code" : ""}`}
+            onClick={() => setMode("code")}
+            disabled={streaming}
+          >
+            Code
+          </button>
+        </div>
         <div className="chat-input-wrapper">
           <textarea
             ref={textareaRef}
@@ -353,7 +353,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+              if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 handleSend();
               }

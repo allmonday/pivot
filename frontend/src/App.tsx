@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Task, Folder, ChatMessage } from "./types";
-import { FolderList } from "./components/FolderList";
-import { TaskList } from "./components/TaskList";
+import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { fetchFolders, fetchTasks, fetchSession, fetchMessages } from "./api";
@@ -33,8 +32,20 @@ export default function App() {
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
   const [planWidth, setPlanWidth] = useState(400);
 
-  const handleTaskSwitch = async (task: Task) => {
-    setParamsInUrl(selectedFolder?.id ?? null, task.id);
+  const handleFolderSelect = (folder: Folder) => {
+    setParamsInUrl(folder.id, null);
+    setSelectedFolder(folder);
+  };
+
+  const handleTaskSelect = async (task: Task) => {
+    // Ensure folder is set for this task
+    if (!selectedFolder || selectedFolder.id !== task.folder_id) {
+      const folders = await fetchFolders();
+      const folder = folders.find((f) => f.id === task.folder_id);
+      if (folder) setSelectedFolder(folder);
+    }
+
+    setParamsInUrl(task.folder_id, task.id);
     setWorking(false);
     setSelectedTask(task);
     setPlanVisible(task.plan_paths.length > 0);
@@ -46,20 +57,10 @@ export default function App() {
     setInitialMessages(history);
   };
 
-  const handleFolderSwitch = (folder: Folder) => {
-    setParamsInUrl(folder.id, null);
-    setSelectedFolder(folder);
-    setSelectedTask(null);
-    setSessionId(null);
-    setInitialMessages([]);
-    setPlanVisible(false);
-  };
-
   const handleStreamingDone = (streaming: boolean) => {
     setWorking(streaming);
     if (!streaming) {
       setPlanRefreshKey((k) => k + 1);
-      // Re-fetch task to get updated plan_path
       if (selectedTask) {
         fetchTasks().then((tasks) => {
           const updated = tasks.find((t) => t.id === selectedTask.id);
@@ -105,35 +106,22 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif" }}>
-      {/* Left: Folder List */}
+      {/* Left: Sidebar (Folders + Tasks) */}
       <div
         style={{
-          width: 200,
+          width: 260,
           borderRight: "1px solid #e0e0e0",
           overflow: "auto",
           background: "#fafafa",
+          flexShrink: 0,
         }}
       >
-        <FolderList
+        <Sidebar
           selectedFolderId={selectedFolder?.id ?? null}
-          onSelectFolder={handleFolderSwitch}
-        />
-      </div>
-
-      {/* Middle: Task List */}
-      <div
-        style={{
-          width: 220,
-          borderRight: "1px solid #e0e0e0",
-          overflow: "auto",
-          background: "#fff",
-        }}
-      >
-        <TaskList
-          folderId={selectedFolder?.id ?? null}
           selectedTaskId={selectedTask?.id ?? null}
           workingTaskId={working ? selectedTask?.id ?? null : null}
-          onSelectTask={handleTaskSwitch}
+          onSelectFolder={handleFolderSelect}
+          onSelectTask={handleTaskSelect}
         />
       </div>
 

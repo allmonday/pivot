@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import type { ContentBlock } from "../../types";
 import type { ToolConfig } from "./toolConfigs";
 
@@ -17,20 +18,50 @@ function DiffView({ input }: { input: Record<string, unknown> }) {
       {filePath && (
         <div className="tool-diff-filename">{filePath}</div>
       )}
-      <div className="tool-diff-panes">
-        {oldStr && (
-          <div className="tool-diff-pane tool-diff-pane--old">
-            <div className="tool-diff-pane-header">Before</div>
-            <pre className="tool-diff-content">{oldStr}</pre>
-          </div>
-        )}
-        {newStr && (
-          <div className="tool-diff-pane tool-diff-pane--new">
-            <div className="tool-diff-pane-header">After</div>
-            <pre className="tool-diff-content">{newStr}</pre>
-          </div>
-        )}
-      </div>
+      <ReactDiffViewer
+        oldValue={oldStr}
+        newValue={newStr}
+        splitView={true}
+        compareMethod={DiffMethod.WORDS}
+        hideLineNumbers={false}
+        styles={{
+          variables: {
+            light: {
+              diffViewerBackground: "#fafafa",
+              addedBackground: "#dcfce7",
+              addedColor: "#15803d",
+              removedBackground: "#fde8e8",
+              removedColor: "#b91c1c",
+              wordAddedBackground: "#bbf7d0",
+              wordRemovedBackground: "#fecaca",
+              addedGutterBackground: "#e8f5e9",
+              removedGutterBackground: "#ffebee",
+              gutterBackground: "#f7f7f8",
+              gutterBackgroundDark: "#eee",
+              codeFoldGutterBackground: "#dbedff",
+              codeFoldBackground: "#f1f8ff",
+              emptyLineBackground: "#f7f7f8",
+              gutterColor: "#999",
+              addedGutterColor: "#15803d",
+              removedGutterColor: "#b91c1c",
+              codeFoldContentColor: "#666",
+              diffViewerTitleBackground: "#fafafa",
+              diffViewerTitleColor: "#666",
+              diffViewerTitleBorderColor: "#e5e5e5",
+            },
+          },
+          contentText: {
+            fontSize: "12px",
+            fontFamily: "'SF Mono', 'Menlo', monospace",
+            lineHeight: "1.5",
+          },
+          gutter: {
+            padding: "0 8px",
+            fontSize: "11px",
+            minWidth: "40px",
+          },
+        }}
+      />
     </div>
   );
 }

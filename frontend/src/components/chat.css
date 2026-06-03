@@ -16,9 +16,9 @@
   height: 48px;
   border-bottom: 1px solid #e5e5e5;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .chat-mode-toggle {
@@ -28,6 +28,8 @@
   overflow: hidden;
   border: 1px solid #d9d9d9;
   background: #f7f7f8;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .chat-mode-btn {
@@ -111,6 +113,7 @@
   font-weight: 700;
   color: #fff;
   user-select: none;
+  margin-top: 6px;
 }
 
 .chat-avatar--user {
@@ -184,7 +187,9 @@
   padding: 12px 24px 24px;
   display: flex;
   justify-content: center;
+  align-items: flex-end;
   flex-shrink: 0;
+  gap: 20px;
 }
 
 .chat-input-wrapper {
@@ -382,6 +387,8 @@
 /* ---------- Tool Diff View ---------- */
 .tool-diff {
   padding: 0;
+  overflow: auto;
+  max-height: 400px;
 }
 
 .tool-diff-filename {
@@ -391,51 +398,6 @@
   font-size: 11px;
   color: #666;
   border-bottom: 1px solid #e5e5e5;
-}
-
-.tool-diff-panes {
-  display: flex;
-  gap: 0;
-}
-
-.tool-diff-pane {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  max-height: 300px;
-}
-
-.tool-diff-pane--old {
-  border-right: 1px solid #e5e5e5;
-}
-
-.tool-diff-pane-header {
-  padding: 4px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.tool-diff-pane--old .tool-diff-pane-header {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.tool-diff-pane--new .tool-diff-pane-header {
-  background: #f0fdf4;
-  color: #15803d;
-}
-
-.tool-diff-content {
-  margin: 0;
-  padding: 8px 12px;
-  background: #fafafa;
-  font-size: 12px;
-  font-family: 'SF Mono', 'Menlo', monospace;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 /* ---------- Code Block ---------- */
