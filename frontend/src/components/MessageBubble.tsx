@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { ChatMessage, ContentBlock } from "../types";
 import { getToolConfig } from "./tools/toolConfigs";
 import { OneLineTool } from "./tools/OneLineTool";
@@ -46,6 +46,32 @@ const ToolBlock = memo(function ToolBlock({ block, onSelectOption }: { block: Co
   return <CollapsibleTool block={block} config={config} />;
 });
 
+function ThinkingBlock({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="my-1.5">
+      <button
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <svg
+          className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+          viewBox="0 0 16 16"
+          fill="currentColor"
+        >
+          <path d="M6 4l4 4-4 4" />
+        </svg>
+        Thinking...
+      </button>
+      {expanded && (
+        <div className="mt-1.5 pl-4 border-l-2 border-border text-xs text-muted-foreground whitespace-pre-wrap break-words">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({ message, isStreaming, onSelectOption }: Props) {
   const isUser = message.role === "user";
 
@@ -81,6 +107,9 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
         ) : (
           <>
             {message.content.map((block, i) => {
+              if (block.kind === "thinking" && block.text) {
+                return <ThinkingBlock key={i} text={block.text} />;
+              }
               if (block.kind === "text" && block.text) {
                 return (
                   <div key={i} className="markdown-body max-w-full text-[15px] leading-relaxed">

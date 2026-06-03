@@ -139,8 +139,6 @@ def _merge_blocks_to_messages(blocks: list[dict]) -> list[dict]:
                     result[-1]["content"].append({"kind": "tool_result", "content": block.get("content", "")})
         elif block["role"] == "assistant":
             kind = block.get("kind", "unknown")
-            if kind == "thinking":
-                continue
             if result and result[-1]["role"] == "assistant":
                 result[-1]["content"].append({k: v for k, v in block.items() if k != "role"})
             else:
@@ -183,6 +181,10 @@ async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
 
 
 async def get_full_history(db: AsyncSession, task_id: str) -> list[dict]:
+    # NOTE: Uses internal SDK API (underscore-prefixed modules).
+    # These are not part of the public API and may break on SDK upgrades.
+    # If public alternatives become available, migrate immediately.
+    # Tracked in GitHub Issue #14.
     from claude_agent_sdk._internal.sessions import (
         _parse_transcript_entries,
         _read_session_file,
