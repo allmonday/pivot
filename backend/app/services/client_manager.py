@@ -61,8 +61,8 @@ class TaskClientManager:
             get_state=self._get_state,
             push_event=self._push_event,
         )
-        client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool, mode="code"))
-        await client.connect(session_id=session_id)
+        client = ClaudeSDKClient(options=build_options(folder_path, can_use_tool, mode="code", session_id=session_id))
+        await client.connect()
         state.client = client
         return state
 

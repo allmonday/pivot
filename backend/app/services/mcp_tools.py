@@ -19,7 +19,7 @@ async def _present_options(args: dict) -> dict:
 ui_mcp = create_sdk_mcp_server("ui_tools", tools=[_present_options])
 
 
-def build_options(folder_path: str, can_use_tool=None, mode: str = "code") -> ClaudeAgentOptions:
+def build_options(folder_path: str, can_use_tool=None, mode: str = "code", session_id: str | None = None) -> ClaudeAgentOptions:
     preset = "claude_code" if mode == "code" else "plan"
 
     return ClaudeAgentOptions(
@@ -28,6 +28,7 @@ def build_options(folder_path: str, can_use_tool=None, mode: str = "code") -> Cl
         mcp_servers={"ui_tools": ui_mcp},
         can_use_tool=can_use_tool,
         max_turns=settings.max_turns,
+        session_id=session_id,
         system_prompt={
             "type": "preset",
             "preset": preset,
