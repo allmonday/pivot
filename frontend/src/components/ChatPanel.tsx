@@ -15,6 +15,8 @@ interface Props {
   planVisible: boolean;
   onTogglePlan: () => void;
   hasPlan: boolean;
+  historyVisible: boolean;
+  onToggleHistory: () => void;
 }
 
 const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -47,7 +49,7 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -316,6 +318,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             className="ml-2 h-6 text-xs"
           >
             Plan
+          </Button>
+        )}
+        {sessionId && (
+          <Button
+            variant={historyVisible ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleHistory}
+            className="ml-auto h-6 text-xs"
+          >
+            History
           </Button>
         )}
       </div>

@@ -76,6 +76,16 @@ export async function fetchMessages(taskId: string): Promise<ChatMessage[]> {
   }));
 }
 
+export async function fetchFullHistory(taskId: string): Promise<ChatMessage[]> {
+  const res = await fetch(`${BASE}/full-history/${taskId}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data as ChatMessage[]).map((msg) => ({
+    ...msg,
+    content: msg.content.filter((b) => b.kind !== "thinking"),
+  }));
+}
+
 // File APIs (used by FolderPicker)
 
 export async function fetchFiles(path: string): Promise<import("./types").FileInfo[]> {
