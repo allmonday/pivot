@@ -180,6 +180,25 @@ async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
     return _merge_blocks_to_messages(blocks)
 
 
+def extract_plain_text(messages: list[dict]) -> str:
+    """从 ChatMessage 格式的消息列表中提取纯文本，用于摘要生成。"""
+    lines: list[str] = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content_blocks = msg.get("content", [])
+        if not isinstance(content_blocks, list):
+            continue
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            kind = block.get("kind", "")
+            if kind == "text":
+                text = block.get("text", "").strip()
+                if text:
+                    lines.append(f"[{role}] {text}")
+    return "\n".join(lines)
+
+
 async def get_full_history(db: AsyncSession, task_id: str) -> list[dict]:
     # NOTE: Uses internal SDK API (underscore-prefixed modules).
     # These are not part of the public API and may break on SDK upgrades.

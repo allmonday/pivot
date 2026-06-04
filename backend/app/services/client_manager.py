@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import asyncio
 import logging
 from dataclasses import dataclass, field
@@ -12,11 +11,13 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 
-from ..models import SessionORM, TaskORM
+from ..models import SessionORM
 from .mcp_tools import build_options
 from .permissions import make_can_use_tool, resolve_permission as _resolve_permission
 from .plan import detect_new_plans
 from .serializers import serialize_message
+from .summarizer import summarize_text
+from .history import get_history, extract_plain_text
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,7 @@ class ClientState:
     done: asyncio.Event = field(default_factory=asyncio.Event)
     mode: str = "code"
     pending_permissions: dict = field(default_factory=dict)
+    plans: list[str] = field(default_factory=list)
 
 
 class TaskClientManager:
@@ -132,16 +134,10 @@ class TaskClientManager:
                     self._push_event(state, serialized)
 
                 if isinstance(message, ResultMessage) and mode == "plan":
-                    result = await db.execute(select(TaskORM).where(TaskORM.id == task_id))
-                    task_orm = result.scalar_one_or_none()
-                    if task_orm:
-                        existing_paths = json.loads(task_orm.plan_paths or "[]")
-                        new_plans = detect_new_plans(state.folder_path, existing_paths)
-                        if new_plans:
-                            updated = existing_paths + new_plans
-                            task_orm.plan_paths = json.dumps(updated, ensure_ascii=False)
-                            await db.commit()
-                            self._push_event(state, {"type": "plan_updated", "plan_paths": updated})
+                    new_plans = detect_new_plans(state.folder_path, state.plans)
+                    if new_plans:
+                        state.plans.extend(new_plans)
+                        self._push_event(state, {"type": "plan_updated", "plan_paths": list(state.plans)})
 
         except Exception as e:
             logger.error("Query failed for task %s: %s", task_id, e)
@@ -152,6 +148,35 @@ class TaskClientManager:
             logger.info("Query finished for task %s", task_id)
             for q in state.queues:
                 q.put_nowait(None)
+
+    async def _auto_summarize(self, task_id: str) -> None:
+        """对话结束后自动生成摘要并存入数据库。"""
+        from ..config import settings
+        from ..database import async_session
+        from ..models import TaskORM
+
+        if not settings.deepseek_api_key:
+            return
+
+        try:
+            async with async_session() as db:
+                messages = await get_history(db, task_id)
+                if not messages:
+                    return
+
+                plain_text = extract_plain_text(messages)
+                summary = await summarize_text(plain_text)
+                if summary:
+                    result = await db.execute(
+                        select(TaskORM).where(TaskORM.id == task_id)
+                    )
+                    task = result.scalar_one_or_none()
+                    if task:
+                        task.summary = summary
+                        await db.commit()
+                        logger.info("Summary generated for task %s", task_id)
+        except Exception:
+            logger.warning("Auto-summarize failed for task %s", task_id, exc_info=True)
 
     def _push_event(self, state: ClientState, data: dict) -> None:
         event_type = data.get("type", "unknown")
@@ -219,6 +244,12 @@ class TaskClientManager:
             await self.disconnect(tid)
         if task_ids:
             logger.info("Shutdown complete, disconnected %d client(s)", len(task_ids))
+
+    def get_plans(self, task_id: str) -> list[str]:
+        state = self._clients.get(task_id)
+        if state is None:
+            return []
+        return list(state.plans)
 
 
 # 全局单例

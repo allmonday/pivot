@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,8 +26,7 @@ class TaskORM(Base):
     folder_id: Mapped[str] = mapped_column(
         String, ForeignKey("folders.id", ondelete="CASCADE"), nullable=False
     )
-
-    plan_paths: Mapped[str | None] = mapped_column(String, nullable=True)  # JSON list
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     folder: Mapped["FolderORM"] = relationship("FolderORM", back_populates="tasks")
     session: Mapped["SessionORM | None"] = relationship(

@@ -1,4 +1,3 @@
-import json
 from typing import Optional
 
 from sqlalchemy import select
@@ -15,8 +14,7 @@ async def get_task(db: AsyncSession, task_id: str) -> Optional[Task]:
     )
     task = result.scalar_one_or_none()
     if task:
-        plan_paths = json.loads(task.plan_paths or "[]")
-        return Task(id=task.id, name=task.name, folder_id=task.folder_id, plan_paths=plan_paths)
+        return Task(id=task.id, name=task.name, folder_id=task.folder_id, summary=task.summary)
     return None
 
 

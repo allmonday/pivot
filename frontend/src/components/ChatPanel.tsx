@@ -59,6 +59,8 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeTaskIdRef = useRef(taskId);
+  activeTaskIdRef.current = taskId;
 
   const {
     messages,
@@ -84,6 +86,10 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
 
   // Reconnect to active stream on taskId change
   useEffect(() => {
+    const currentTaskId = taskId;
+    abortRef.current?.abort();
+    abortRef.current = null;
+
     let cancelled = false;
     checkActiveStream(taskId).then((res) => {
       if (cancelled) return;
@@ -94,25 +100,33 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         resetStreamState();
         setStreaming(true);
 
+        const guard = <T extends unknown[]>(fn: (...args: T) => void) =>
+          (...args: T) => {
+            if (activeTaskIdRef.current !== currentTaskId) return;
+            fn(...args);
+          };
+
         abortRef.current = reconnectStream(
           taskId,
-          handleEvent,
-          (err) => {
+          guard(handleEvent),
+          guard((err: Error) => {
             console.error("Reconnect error:", err);
             setStreaming(false);
             setReconnecting(false);
             onStreamingChange(false);
-          },
-          () => {
+          }),
+          guard(() => {
             setStreaming(false);
             setReconnecting(false);
             onStreamingChange(false);
-          }
+          })
         );
       }
     });
     return () => {
       cancelled = true;
+      abortRef.current?.abort();
+      abortRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
@@ -130,6 +144,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   }, [input]);
 
   const doSend = (text: string, images?: ImageAttachment[]) => {
+    const sendTaskId = taskId;
     const content: ContentBlock[] = [];
     if (text.trim()) {
       content.push({ kind: "text", text });
@@ -148,6 +163,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     onStreamingChange(true);
 
     const onEvent = (eventType: string, data: Record<string, unknown>) => {
+      if (activeTaskIdRef.current !== sendTaskId) return;
       if (eventType === "result" && data.session_id) {
         onSessionIdChange(data.session_id as string);
       }
@@ -161,11 +177,13 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       mode,
       onEvent,
       (err) => {
+        if (activeTaskIdRef.current !== sendTaskId) return;
         console.error(err);
         setStreaming(false);
         onStreamingChange(false);
       },
       () => {
+        if (activeTaskIdRef.current !== sendTaskId) return;
         setStreaming(false);
         onStreamingChange(false);
       },
