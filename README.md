@@ -17,7 +17,14 @@
 
 ## 快速开始
 
-环境要求：Python >= 3.12, Node.js
+环境要求：Python >= 3.12, Node.js 22
+
+```bash
+# 一键启动（自动清理端口、安装依赖、启动前后端）
+bash start.sh
+```
+
+或手动启动：
 
 ```bash
 # Backend

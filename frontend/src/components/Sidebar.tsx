@@ -214,7 +214,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
                           {hasSummary && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <MessageSquareText className="h-3 w-3 shrink-0 text-muted-foreground/50 cursor-pointer" />
+                                <span className="inline-flex"><MessageSquareText className="h-3 w-3 shrink-0 text-muted-foreground/50 cursor-pointer" /></span>
                               </TooltipTrigger>
                               <TooltipContent side="right" className="max-w-[320px] text-left bg-popover text-popover-foreground shadow-lg sidebar-summary-popover">
                                 <Markdown>{task.summary!}</Markdown>

@@ -6,12 +6,25 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ..database import async_session
-from ..schemas.models import ChatRequest
+from ..schemas.models import ChatRequest, SlashCommand
 from ..services import claude_service
 from ..services.client_manager import client_manager
 
 logger = logging.getLogger("cc-sdk")
 router = APIRouter(prefix="/api")
+
+SLASH_COMMANDS: list[SlashCommand] = [
+    SlashCommand(name="/compact", description="Compact conversation context"),
+    SlashCommand(name="/clear", description="Clear conversation history"),
+    SlashCommand(name="/mode", description="Switch between plan and code mode"),
+    SlashCommand(name="/model", description="Switch AI model"),
+    SlashCommand(name="/cost", description="Show token usage and cost"),
+]
+
+
+@router.get("/commands")
+async def get_commands():
+    return SLASH_COMMANDS
 
 
 @router.post("/chat")

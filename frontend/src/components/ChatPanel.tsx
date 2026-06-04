@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, ContentBlock, ImageAttachment } from "../types";
-import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission } from "../api";
+import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission, fetchCommands } from "../api";
+import type { SlashCommand as SlashCommandType } from "../api";
 import { useStreamEvents } from "../hooks/useStreamEvents";
 import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
+import { SlashCommandMenu, type SlashCommand } from "./SlashCommandMenu";
 import { Button } from "@/components/ui/button";
 import { Paperclip, X } from "lucide-react";
 
@@ -58,12 +60,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashFilter, setSlashFilter] = useState("");
+  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTaskIdRef = useRef(taskId);
   activeTaskIdRef.current = taskId;
+  const reconnectingTaskRef = useRef<string | null>(null);
 
   const {
     messages,
@@ -81,22 +87,30 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
 
   // Sync initialMessages into the hook
   useEffect(() => {
+    // Don't disrupt an active SSE reconnection — it replays cached events
+    // and handles message state itself. This prevents a race where
+    // loadSession (returning [] for first conversations) aborts the reconnect.
+    if (reconnectingTaskRef.current === taskId) {
+      return;
+    }
     abortRef.current?.abort();
     abortRef.current = null;
     resetStreamState();
     setMessages(initialMessages);
-  }, [initialMessages]);
+  }, [initialMessages, taskId]);
 
   // Reconnect to active stream on taskId change
   useEffect(() => {
     const currentTaskId = taskId;
     abortRef.current?.abort();
     abortRef.current = null;
+    reconnectingTaskRef.current = null;
 
     let cancelled = false;
     checkActiveStream(taskId).then((res) => {
       if (cancelled) return;
       if (res.active) {
+        reconnectingTaskRef.current = currentTaskId;
         setReconnecting(true);
         setStreaming(true);
         onStreamingChange(true);
@@ -114,11 +128,13 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
           guard(handleEvent),
           guard((err: Error) => {
             console.error("Reconnect error:", err);
+            reconnectingTaskRef.current = null;
             setStreaming(false);
             setReconnecting(false);
             onStreamingChange(false);
           }),
           guard(() => {
+            reconnectingTaskRef.current = null;
             setStreaming(false);
             setReconnecting(false);
             onStreamingChange(false);
@@ -128,11 +144,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     });
     return () => {
       cancelled = true;
+      reconnectingTaskRef.current = null;
       abortRef.current?.abort();
       abortRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
+
+  useEffect(() => {
+    fetchCommands().then(setSlashCommands).catch(console.error);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
@@ -145,6 +166,34 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       el.style.height = Math.min(el.scrollHeight, 160) + "px";
     }
   }, [input]);
+
+  const slashMenuPosition = useMemo(() => {
+    const el = textareaRef.current;
+    if (!el) return { top: 0, left: 42 };
+    return { top: el.offsetTop, left: 42 };
+  }, []);
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value.startsWith("/")) {
+      const spaceIdx = value.indexOf(" ");
+      const query = spaceIdx === -1 ? value.slice(1) : "";
+      if (spaceIdx === -1) {
+        setSlashFilter(query);
+        setSlashMenuOpen(true);
+      } else {
+        setSlashMenuOpen(false);
+      }
+    } else {
+      setSlashMenuOpen(false);
+    }
+  };
+
+  const handleSlashSelect = (cmd: SlashCommand) => {
+    setInput(cmd.name + " ");
+    setSlashMenuOpen(false);
+    textareaRef.current?.focus();
+  };
 
   const doSend = (text: string, images?: ImageAttachment[]) => {
     const sendTaskId = taskId;
@@ -420,17 +469,29 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             ref={textareaRef}
             rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onPaste={handlePaste}
+            onBlur={() => setTimeout(() => setSlashMenuOpen(false), 150)}
             onKeyDown={(e) => {
+              if (slashMenuOpen) return;
               if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            placeholder="Message... (Shift+Enter for new line)"
+            placeholder="Message... (type / for commands, Shift+Enter for new line)"
             className="w-full py-3.5 pl-[42px] pr-[52px] rounded-3xl border border-input text-[15px] resize-none outline-none leading-relaxed min-h-[48px] max-h-[160px] overflow-hidden shadow-sm transition-[border-color,box-shadow] focus:border-primary focus:shadow-[0_2px_12px_rgba(25,118,210,0.12)] disabled:bg-muted/50 disabled:opacity-70 placeholder:text-muted-foreground/50"
           />
+
+          {slashMenuOpen && (
+            <SlashCommandMenu
+              commands={slashCommands}
+              filter={slashFilter}
+              position={slashMenuPosition}
+              onSelect={handleSlashSelect}
+              onClose={() => setSlashMenuOpen(false)}
+            />
+          )}
 
           {/* Attach button */}
           <button

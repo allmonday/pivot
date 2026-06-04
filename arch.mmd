@@ -1,0 +1,93 @@
+graph TD
+    subgraph FE["Frontend (React + Vite)"]
+        API["api.ts — HTTP 调用层"]
+        App["App.tsx — 根布局与路由"]
+        Sidebar["Sidebar — 会话列表"]
+        ChatPanel["ChatPanel — 对话面板"]
+        MessageBubble["MessageBubble — 消息气泡"]
+        Tools["tools/ — 工具调用展示"]
+        PlanPanel["PlanPanel — 计划面板"]
+        HistoryPanel["HistoryPanel — 历史记录"]
+        FileExplorer["FileExplorerPanel — 文件浏览"]
+        MarkdownRenderer["MarkdownRenderer — Markdown 渲染"]
+        TaskList["TaskList — 任务列表"]
+    end
+
+    subgraph BE["Backend (FastAPI)"]
+        Main["main.py — 应用入口"]
+
+        subgraph Routers["Routers"]
+            R_Chat["chat — 对话"]
+            R_Sessions["sessions — 会话管理"]
+            R_Tasks["tasks — 任务"]
+            R_Messages["messages — 消息查询"]
+            R_Folders["folders — 文件夹"]
+            R_Files["files — 文件"]
+            R_Permissions["permissions — 权限"]
+        end
+
+        subgraph Services["Services"]
+            ClaudeService["claude_service — Claude API 调用"]
+            ClientManager["client_manager — 客户端管理"]
+            History["history — 历史服务"]
+            Plan["plan — 计划管理"]
+            Summarizer["summarizer — 摘要生成"]
+            MCPTools["mcp_tools — MCP 工具"]
+            Permissions["permissions — 权限服务"]
+            Serializers["serializers — 序列化"]
+        end
+
+        DB["database — SQLite"]
+        Models["models — ORM 模型"]
+        Schemas["schemas — 请求/响应模型"]
+    end
+
+    %% ---- History 服务内部细节 ----
+
+    subgraph HistoryDetail["history 服务内部"]
+        direction TB
+        H_GetHistory["get_history<br/>通过 SDK 公开 API 获取简洁历史"]
+        H_GetFullHistory["get_full_history<br/>通过 SDK 内部 API 获取完整历史"]
+        H_ExtractText["extract_plain_text<br/>提取纯文本，供 Summarizer 调用"]
+        H_Filter["_is_visible_entry<br/>过滤 isMeta / isSidechain / team"]
+        H_Chain["_build_full_chain<br/>沿 parentUuid 回溯构建完整链<br/>展开 isCompactSummary 为原始消息"]
+        H_Serialize["serialize_raw_content<br/>解析 text / tool_use / tool_result<br/>/ thinking / image"]
+        H_Merge["_merge_blocks_to_messages<br/>合并相邻同角色块 → ChatMessage[]"]
+
+        H_GetHistory --> H_Serialize
+        H_GetFullHistory --> H_Filter --> H_Chain --> H_Serialize
+        H_Serialize --> H_Merge
+        H_Merge -.-> H_ExtractText
+    end
+
+    History -.- HistoryDetail
+
+    %% ---- Permissions 服务内部细节 ----
+
+    subgraph PermissionsDetail["permissions 服务内部"]
+        direction TB
+        P_MakeCallback["make_can_use_tool<br/>为指定 task 创建 can_use_tool 回调<br/>注入到 Claude SDK 客户端"]
+        P_Pending["PendingPermission<br/>持有 request_id / tool_name / event<br/>阻塞等待用户决策"]
+        P_Resolve["resolve_permission<br/>根据用户决策设置 allow / deny<br/>唤醒 event 通知 SDK 继续"]
+        P_Timeout["asyncio.wait_for<br/>超时自动 deny<br/>timeout 由 settings.permission_timeout 控制"]
+
+        P_MakeCallback -->|"工具触发权限检查"| P_Pending
+        P_Pending -->|"等待前端决策"| P_Resolve
+        P_Pending -->|"超时"| P_Timeout
+    end
+
+    Permissions -.- PermissionsDetail
+
+    %% ---- 模块间调用 ----
+
+    API --> R_Chat
+    API --> R_Sessions
+    API --> R_Tasks
+    API --> R_Messages
+    API --> R_Folders
+    API --> R_Files
+
+    Routers --> Services
+    Services --> DB
+    DB --> Models
+    Routers --> Schemas

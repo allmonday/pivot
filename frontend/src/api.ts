@@ -269,6 +269,17 @@ export async function summarizeTask(taskId: string): Promise<{ summary: string |
 }
 
 // 权限审批
+export interface SlashCommand {
+  name: string;
+  description: string;
+}
+
+export async function fetchCommands(): Promise<SlashCommand[]> {
+  const res = await fetch(`${BASE}/commands`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function resolvePermission(
   taskId: string,
   requestId: string,

@@ -64,3 +64,8 @@ class PlanFile(BaseModel):
     name: str
     path: str
     modified_at: str
+
+
+class SlashCommand(BaseModel):
+    name: str
+    description: str
