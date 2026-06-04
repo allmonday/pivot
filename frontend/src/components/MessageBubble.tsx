@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { ChatMessage, ContentBlock } from "../types";
 import { getToolConfig } from "./tools/toolConfigs";
 import { OneLineTool } from "./tools/OneLineTool";
@@ -72,6 +72,62 @@ function ThinkingBlock({ text }: { text: string }) {
   );
 }
 
+type ContentGroup =
+  | { type: "single"; block: ContentBlock; index: number }
+  | { type: "tools"; blocks: { block: ContentBlock; index: number }[] };
+
+function groupContentBlocks(blocks: ContentBlock[]): ContentGroup[] {
+  const groups: ContentGroup[] = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const block = blocks[i];
+    if (block.kind === "tool_use" || block.kind === "tool_result") {
+      const toolBlocks: { block: ContentBlock; index: number }[] = [];
+      while (i < blocks.length && (blocks[i].kind === "tool_use" || blocks[i].kind === "tool_result")) {
+        toolBlocks.push({ block: blocks[i], index: i });
+        i++;
+      }
+      groups.push({ type: "tools", blocks: toolBlocks });
+    } else {
+      groups.push({ type: "single", block, index: i });
+      i++;
+    }
+  }
+  return groups;
+}
+
+function AssistantContent({ blocks, onSelectOption }: { blocks: ContentBlock[]; onSelectOption?: (text: string) => void }) {
+  const groups = useMemo(() => groupContentBlocks(blocks), [blocks]);
+
+  return (
+    <>
+      {groups.map((group) => {
+        if (group.type === "single") {
+          const { block, index: i } = group;
+          if (block.kind === "thinking" && block.text) {
+            return <ThinkingBlock key={i} text={block.text} />;
+          }
+          if (block.kind === "text" && block.text) {
+            return (
+              <div key={i} className="markdown-body max-w-full text-[15px] leading-relaxed">
+                <MarkdownRenderer content={block.text} />
+              </div>
+            );
+          }
+          return null;
+        }
+        return (
+          <div key={`tools-${group.blocks[0].index}`} className="max-h-[300px] overflow-auto scrollbar-thin my-2">
+            {group.blocks.map(({ block, index: i }) => (
+              <ToolBlock key={i} block={block} onSelectOption={onSelectOption} />
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({ message, isStreaming, onSelectOption }: Props) {
   const isUser = message.role === "user";
 
@@ -105,24 +161,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
             })}
           </div>
         ) : (
-          <>
-            {message.content.map((block, i) => {
-              if (block.kind === "thinking" && block.text) {
-                return <ThinkingBlock key={i} text={block.text} />;
-              }
-              if (block.kind === "text" && block.text) {
-                return (
-                  <div key={i} className="markdown-body max-w-full text-[15px] leading-relaxed">
-                    <MarkdownRenderer content={block.text} />
-                  </div>
-                );
-              }
-              if (block.kind === "tool_use" || block.kind === "tool_result") {
-                return <ToolBlock key={i} block={block} onSelectOption={onSelectOption} />;
-              }
-              return null;
-            })}
-          </>
+          <AssistantContent blocks={message.content} onSelectOption={onSelectOption} />
         )}
       </div>
     </div>

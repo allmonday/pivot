@@ -1,14 +1,18 @@
 import { useEffect, useState, useCallback } from "react";
 import type { FileInfo } from "../types";
 import { fetchFiles, fetchFileContent } from "../api";
-import { X, FolderIcon, FileText, ChevronRight, ChevronDown } from "lucide-react";
+import { X, FolderIcon, FileText, ChevronRight, ChevronDown, Columns2, Rows2 } from "lucide-react";
+import type { FileExplorerLayout } from "../hooks/useLayout";
 import Editor from "@monaco-editor/react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface Props {
   folderPath: string | null;
   visible: boolean;
   onClose: () => void;
   height: number;
+  layout: FileExplorerLayout;
+  onToggleLayout?: () => void;
 }
 
 interface TreeNode {
@@ -94,7 +98,7 @@ function FileTreeItem({
   );
 }
 
-export function FileExplorerPanel({ folderPath, visible, onClose, height }: Props) {
+export function FileExplorerPanel({ folderPath, visible, onClose, height, layout, onToggleLayout }: Props) {
   const [rootFiles, setRootFiles] = useState<FileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -117,21 +121,34 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height }: Prop
 
   if (!visible) return null;
 
+  const isVertical = layout === "vertical";
+
   return (
     <div
-      className="border-t border-border flex bg-muted/50 shrink-0"
-      style={{ height }}
+      className={`flex bg-muted/50 shrink-0 ${isVertical ? "border-t border-border" : "border-l border-border"}`}
+      style={isVertical ? { height } : { width: height }}
     >
       {/* File tree */}
       <div className="w-[200px] shrink-0 border-r border-border flex flex-col">
         <div className="px-3 py-2 border-b border-border flex justify-between items-center bg-background">
           <span className="text-[13px] font-semibold text-foreground">Files</span>
-          <button
-            className="text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={onClose}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onToggleLayout && (
+              <button
+                className="text-muted-foreground hover:text-foreground cursor-pointer p-0.5"
+                onClick={onToggleLayout}
+                title={isVertical ? "Switch to left-right layout" : "Switch to top-bottom layout"}
+              >
+                {isVertical ? <Columns2 className="h-3.5 w-3.5" /> : <Rows2 className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            <button
+              className="text-muted-foreground hover:text-foreground cursor-pointer p-0.5"
+              onClick={onClose}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-auto py-1 scrollbar-thin">
           {rootFiles.map((file) => (
@@ -153,6 +170,13 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height }: Prop
             <div className="px-3 py-2 border-b border-border bg-background truncate text-[12px] text-muted-foreground">
               {selectedFile.path.split("/").pop()}
             </div>
+            {selectedFile.path.endsWith(".md") ? (
+              <div className="flex-1 overflow-auto p-4 scrollbar-thin">
+                <div className="markdown-body max-w-full">
+                  <MarkdownRenderer content={selectedFile.content} />
+                </div>
+              </div>
+            ) : (
             <div className="flex-1">
               <Editor
                 height="100%"
@@ -173,6 +197,7 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height }: Prop
                 }}
               />
             </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-[13px]">

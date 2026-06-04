@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+export type FileExplorerLayout = "horizontal" | "vertical";
+
 export function useLayout() {
   const [planVisible, setPlanVisible] = useState(false);
   const [planWidth, setPlanWidth] = useState(400);
@@ -7,6 +9,7 @@ export function useLayout() {
   const [historyWidth, setHistoryWidth] = useState(500);
   const [fileExplorerVisible, setFileExplorerVisible] = useState(false);
   const [fileExplorerHeight, setFileExplorerHeight] = useState(300);
+  const [fileExplorerLayout, setFileExplorerLayout] = useState<FileExplorerLayout>("vertical");
 
   const togglePlan = () => setPlanVisible((v) => !v);
   const closePlan = () => setPlanVisible(false);
@@ -14,6 +17,8 @@ export function useLayout() {
   const closeHistory = () => setHistoryVisible(false);
   const toggleFileExplorer = () => setFileExplorerVisible((v) => !v);
   const closeFileExplorer = () => setFileExplorerVisible(false);
+  const toggleFileExplorerLayout = () =>
+    setFileExplorerLayout((v) => (v === "vertical" ? "horizontal" : "vertical"));
 
   return {
     planVisible,
@@ -32,6 +37,8 @@ export function useLayout() {
     setFileExplorerVisible,
     fileExplorerHeight,
     setFileExplorerHeight,
+    fileExplorerLayout,
+    toggleFileExplorerLayout,
     toggleFileExplorer,
     closeFileExplorer,
   };

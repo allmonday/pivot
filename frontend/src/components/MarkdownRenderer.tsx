@@ -184,7 +184,7 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
 
   if (!hasLang) {
     return (
-      <code className="bg-muted text-foreground text-xs px-1.5 py-0.5 rounded font-mono whitespace-pre-wrap break-all">
+      <code className="text-foreground text-xs px-1.5 py-0.5 rounded font-mono whitespace-pre-wrap break-all">
         {children}
       </code>
     );

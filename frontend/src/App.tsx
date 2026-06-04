@@ -118,52 +118,74 @@ export default function App() {
       <div className="flex-1 flex flex-col min-h-0">
         {selectedTask ? (
           <div className="flex-1 flex min-h-0">
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <ChatPanel
-                    taskId={selectedTask.id}
-                    sessionId={chatSession.sessionId}
-                    initialMessages={chatSession.initialMessages}
-                    onSessionIdChange={chatSession.setSessionId}
-                    onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
-                    planVisible={layout.planVisible}
-                    onTogglePlan={layout.togglePlan}
-                    hasPlan={planPaths.length > 0}
-                    historyVisible={layout.historyVisible}
-                    onToggleHistory={layout.toggleHistory}
-                    fileExplorerVisible={layout.fileExplorerVisible}
-                    onToggleFileExplorer={layout.toggleFileExplorer}
-                    hasFolder={!!selectedFolder}
-                  />
-                </div>
-                {layout.fileExplorerVisible && (
-                  <div
-                    className="h-1 cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      const startY = e.clientY;
-                      const startHeight = layout.fileExplorerHeight;
-                      const onMove = (ev: MouseEvent) => {
-                        const delta = startY - ev.clientY;
-                        layout.setFileExplorerHeight(Math.max(150, Math.min(600, startHeight + delta)));
-                      };
-                      const onUp = () => {
-                        document.removeEventListener("mousemove", onMove);
-                        document.removeEventListener("mouseup", onUp);
-                      };
-                      document.addEventListener("mousemove", onMove);
-                      document.addEventListener("mouseup", onUp);
-                    }}
-                  />
-                )}
-                <FileExplorerPanel
-                  folderPath={selectedFolder?.folder_path ?? null}
-                  visible={layout.fileExplorerVisible}
-                  onClose={layout.closeFileExplorer}
-                  height={layout.fileExplorerHeight}
+            <div className={`flex-1 flex min-h-0 overflow-hidden ${layout.fileExplorerVisible && layout.fileExplorerLayout === "horizontal" ? "flex-row" : "flex-col"}`}>
+              <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+                <ChatPanel
+                  taskId={selectedTask.id}
+                  sessionId={chatSession.sessionId}
+                  initialMessages={chatSession.initialMessages}
+                  onSessionIdChange={chatSession.setSessionId}
+                  onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
+                  planVisible={layout.planVisible}
+                  onTogglePlan={layout.togglePlan}
+                  hasPlan={planPaths.length > 0}
+                  historyVisible={layout.historyVisible}
+                  onToggleHistory={layout.toggleHistory}
+                  fileExplorerVisible={layout.fileExplorerVisible}
+                  onToggleFileExplorer={layout.toggleFileExplorer}
+                  fileExplorerLayout={layout.fileExplorerLayout}
+                  onToggleFileExplorerLayout={layout.toggleFileExplorerLayout}
+                  hasFolder={!!selectedFolder}
                 />
               </div>
+              {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (
+                <div
+                  className="h-1 cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    const startY = e.clientY;
+                    const startHeight = layout.fileExplorerHeight;
+                    const onMove = (ev: MouseEvent) => {
+                      const delta = startY - ev.clientY;
+                      layout.setFileExplorerHeight(Math.max(150, Math.min(600, startHeight + delta)));
+                    };
+                    const onUp = () => {
+                      document.removeEventListener("mousemove", onMove);
+                      document.removeEventListener("mouseup", onUp);
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                  }}
+                />
+              )}
+              {layout.fileExplorerVisible && layout.fileExplorerLayout === "horizontal" && (
+                <div
+                  className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const startWidth = layout.fileExplorerHeight;
+                    const onMove = (ev: MouseEvent) => {
+                      const delta = startX - ev.clientX;
+                      layout.setFileExplorerHeight(Math.max(200, Math.min(window.innerWidth * 0.7, startWidth + delta)));
+                    };
+                    const onUp = () => {
+                      document.removeEventListener("mousemove", onMove);
+                      document.removeEventListener("mouseup", onUp);
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                  }}
+                />
+              )}
+              <FileExplorerPanel
+                folderPath={selectedFolder?.folder_path ?? null}
+                visible={layout.fileExplorerVisible}
+                onClose={layout.closeFileExplorer}
+                height={layout.fileExplorerHeight}
+                layout={layout.fileExplorerLayout}
+                onToggleLayout={layout.toggleFileExplorerLayout}
+              />
             </div>
             {layout.planVisible && (
               <div
