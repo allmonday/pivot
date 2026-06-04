@@ -24,7 +24,7 @@ export function OneLineTool({ block, config }: Props) {
           <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1 rounded bg-muted-foreground/20 text-[10px] font-semibold text-muted-foreground shrink-0">
             {config.icon}
           </span>
-          <span className="flex-1 truncate">{value}</span>
+          <span className="flex-1 truncate text-left">{value}</span>
           {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -43,7 +43,7 @@ export function OneLineTool({ block, config }: Props) {
         <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1 rounded bg-muted-foreground/20 text-[10px] font-semibold text-muted-foreground shrink-0">
           out
         </span>
-        <span className="flex-1 truncate">output</span>
+        <span className="flex-1 truncate text-left">output</span>
         {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
       </CollapsibleTrigger>
       <CollapsibleContent>
