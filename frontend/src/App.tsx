@@ -136,6 +136,7 @@ export default function App() {
                   fileExplorerLayout={layout.fileExplorerLayout}
                   onToggleFileExplorerLayout={layout.toggleFileExplorerLayout}
                   hasFolder={!!selectedFolder}
+                  folderPath={selectedFolder?.folder_path ?? null}
                 />
               </div>
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (

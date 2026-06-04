@@ -23,6 +23,25 @@ interface Props {
   fileExplorerVisible: boolean;
   onToggleFileExplorer: () => void;
   hasFolder: boolean;
+  folderPath: string | null;
+}
+
+function CopyButton({ getValue, label }: { getValue: () => string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-6 text-xs"
+      onClick={() => {
+        navigator.clipboard.writeText(getValue());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? "Copied!" : label}
+    </Button>
+  );
 }
 
 const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -55,7 +74,7 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath }: Props) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
@@ -333,6 +352,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
           >
             History
           </Button>
+        )}
+        {sessionId && (
+          <CopyButton
+            getValue={() => {
+              return folderPath
+                ? `cd ${folderPath} && claude --resume ${sessionId}`
+                : `claude --resume ${sessionId}`;
+            }}
+            label="CLI"
+          />
         )}
       </div>
 
