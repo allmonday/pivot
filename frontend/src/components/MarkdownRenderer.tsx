@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -10,7 +11,7 @@ mermaid.initialize({ startOnLoad: false, theme: "default" });
 let mermaidCounter = 0;
 const mermaidCache = new Map<string, string>();
 
-function MermaidBlock({ code }: { code: string }) {
+export function MermaidBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<{ svg: string; scale: number; x: number; y: number } | null>(null);
@@ -109,11 +110,19 @@ function MermaidBlock({ code }: { code: string }) {
   return (
     <>
       <div
-        ref={containerRef}
-        className="overflow-x-auto my-2 [&>svg]:max-w-full cursor-pointer hover:opacity-90 transition-opacity"
-        onClick={openOverlay}
-        title="点击放大查看"
-      />
+        className="relative group"
+      >
+        <div
+          ref={containerRef}
+          className="overflow-x-auto my-2 [&>svg]:max-w-full cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={openOverlay}
+        />
+        <div
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-muted/80 rounded p-1"
+        >
+          <Search className="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+      </div>
       {overlay && (
         <div
           className="fixed inset-0 z-50 bg-gray-100 flex items-center justify-center"

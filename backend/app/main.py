@@ -15,19 +15,19 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("cc-sdk")
+logger = logging.getLogger("pivot")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting CC-SDK Dashboard")
+    logger.info("Starting Pivot")
     await init_db()
     yield
     logger.info("Shutting down, cleaning up %d client(s)", len(client_manager._clients))
     await client_manager.shutdown_all()
 
 
-app = FastAPI(title="CC-SDK Dashboard", lifespan=lifespan)
+app = FastAPI(title="Pivot", lifespan=lifespan)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.add_middleware(

@@ -44,7 +44,11 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
   };
 
   useEffect(() => {
-    fetchFolders().then(setFolders).catch(console.error);
+    fetchFolders().then((fetchedFolders) => {
+      setFolders(fetchedFolders);
+      setExpandedFolderIds(new Set(fetchedFolders.map((f) => f.id)));
+      fetchedFolders.forEach((f) => reloadTasks(f.id));
+    }).catch(console.error);
   }, []);
 
   const handleFolderClick = (folder: Folder) => {

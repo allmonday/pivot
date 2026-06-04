@@ -1,4 +1,4 @@
-# CC-SDK
+# Pivot
 
 基于 Claude Agent SDK 的 AI 开发工作台，集成文件夹管理、任务跟踪和 AI 对话。
 
