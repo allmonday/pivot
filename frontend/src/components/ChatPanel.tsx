@@ -18,6 +18,9 @@ interface Props {
   hasPlan: boolean;
   historyVisible: boolean;
   onToggleHistory: () => void;
+  fileExplorerVisible: boolean;
+  onToggleFileExplorer: () => void;
+  hasFolder: boolean;
 }
 
 const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -50,7 +53,7 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder }: Props) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
@@ -270,6 +273,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             className="ml-auto h-6 text-xs"
           >
             History
+          </Button>
+        )}
+        {hasFolder && (
+          <Button
+            variant={fileExplorerVisible ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleFileExplorer}
+            className={sessionId ? "h-6 text-xs" : "ml-auto h-6 text-xs"}
+          >
+            Files
           </Button>
         )}
       </div>

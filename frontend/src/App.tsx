@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { fetchFolders, fetchTasks, fetchPlans } from "./api";
 import { useChatSession } from "./hooks/useChatSession";
 import { useTaskActivity } from "./hooks/useTaskActivity";
@@ -118,18 +119,51 @@ export default function App() {
         {selectedTask ? (
           <div className="flex-1 flex min-h-0">
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <ChatPanel
-                taskId={selectedTask.id}
-                sessionId={chatSession.sessionId}
-                initialMessages={chatSession.initialMessages}
-                onSessionIdChange={chatSession.setSessionId}
-                onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
-                planVisible={layout.planVisible}
-                onTogglePlan={layout.togglePlan}
-                hasPlan={planPaths.length > 0}
-                historyVisible={layout.historyVisible}
-                onToggleHistory={layout.toggleHistory}
-              />
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ChatPanel
+                    taskId={selectedTask.id}
+                    sessionId={chatSession.sessionId}
+                    initialMessages={chatSession.initialMessages}
+                    onSessionIdChange={chatSession.setSessionId}
+                    onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
+                    planVisible={layout.planVisible}
+                    onTogglePlan={layout.togglePlan}
+                    hasPlan={planPaths.length > 0}
+                    historyVisible={layout.historyVisible}
+                    onToggleHistory={layout.toggleHistory}
+                    fileExplorerVisible={layout.fileExplorerVisible}
+                    onToggleFileExplorer={layout.toggleFileExplorer}
+                    hasFolder={!!selectedFolder}
+                  />
+                </div>
+                {layout.fileExplorerVisible && (
+                  <div
+                    className="h-1 cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const startY = e.clientY;
+                      const startHeight = layout.fileExplorerHeight;
+                      const onMove = (ev: MouseEvent) => {
+                        const delta = startY - ev.clientY;
+                        layout.setFileExplorerHeight(Math.max(150, Math.min(600, startHeight + delta)));
+                      };
+                      const onUp = () => {
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                      };
+                      document.addEventListener("mousemove", onMove);
+                      document.addEventListener("mouseup", onUp);
+                    }}
+                  />
+                )}
+                <FileExplorerPanel
+                  folderPath={selectedFolder?.folder_path ?? null}
+                  visible={layout.fileExplorerVisible}
+                  onClose={layout.closeFileExplorer}
+                  height={layout.fileExplorerHeight}
+                />
+              </div>
             </div>
             {layout.planVisible && (
               <div
