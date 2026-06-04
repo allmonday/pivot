@@ -18,7 +18,7 @@ class Task(BaseModel):
     id: str
     name: str
     folder_id: str
-    plan_paths: list[str] = []
+    summary: Optional[str] = None
 
 
 class TaskCreate(BaseModel):

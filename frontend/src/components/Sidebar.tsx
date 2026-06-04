@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import type { Folder, Task } from "../types";
-import { fetchFolders, fetchTasks, createFolder, createTask, deleteFolder, deleteTask } from "../api";
+import { fetchFolders, fetchTasks, createFolder, createTask, deleteFolder, deleteTask, summarizeTask } from "../api";
 import { FolderPicker } from "./FolderPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { ChevronDown, ChevronRight, Plus, X, Info, FolderIcon, FileText } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X, Info, FolderIcon, FileText, RefreshCw, MessageSquareText } from "lucide-react";
+import Markdown from "react-markdown";
 
 interface Props {
   selectedFolderId: string | null;
@@ -33,6 +34,8 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
   const [addingTaskForFolder, setAddingTaskForFolder] = useState<string | null>(null);
   const [newTaskName, setNewTaskName] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
+
+  const [summarizingTaskId, setSummarizingTaskId] = useState<string | null>(null);
 
   const reloadFolders = () => fetchFolders().then(setFolders).catch(console.error);
 
@@ -121,6 +124,24 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     setNewTaskName("");
   };
 
+  const handleSummarize = async (e: React.MouseEvent, taskId: string, folderId: string) => {
+    e.stopPropagation();
+    setSummarizingTaskId(taskId);
+    try {
+      const result = await summarizeTask(taskId);
+      setTasksMap((prev) => ({
+        ...prev,
+        [folderId]: (prev[folderId] || []).map((t) =>
+          t.id === taskId ? { ...t, summary: result.summary } : t
+        ),
+      }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSummarizingTaskId(null);
+    }
+  };
+
   return (
     <div className="p-4 flex flex-col h-full">
       <h3 className="mb-3 text-[15px] font-semibold text-muted-foreground tracking-wide">工作区</h3>
@@ -168,26 +189,43 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
                     const isSelected = selectedTaskId === task.id;
                     const isWorking = workingTaskIds.has(task.id);
                     const isDone = doneTaskIds.has(task.id);
+                    const hasSummary = !!task.summary;
+                    const isSummarizing = summarizingTaskId === task.id;
                     return (
-                      <div
-                        key={task.id}
-                        onClick={() => onSelectTask(task)}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 mb-0.5 rounded-md cursor-pointer text-[13px] font-normal ${
-                          isSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                        }`}
-                      >
-                        <FileText className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                        <span className="truncate flex-1">{task.name}</span>
-                        {isWorking && (
-                          <span className="text-[11px] text-orange-500 font-medium ml-1">working</span>
-                        )}
-                        {isDone && !isWorking && (
-                          <span className="text-[11px] text-emerald-600 font-medium ml-1">done</span>
-                        )}
-                        <X
-                          className="h-3 w-3 shrink-0 text-muted-foreground/30 hover:text-destructive cursor-pointer"
-                          onClick={(e) => handleTaskDelete(e, task.id, folder.id)}
-                        />
+                      <div key={task.id}>
+                        <div
+                          onClick={() => onSelectTask(task)}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 mb-0.5 rounded-md cursor-pointer text-[13px] font-normal ${
+                            isSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          }`}
+                        >
+                          <FileText className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                          <span className="truncate flex-1">{task.name}</span>
+                          {isWorking && (
+                            <span className="text-[11px] text-orange-500 font-medium ml-1">working</span>
+                          )}
+                          {isDone && !isWorking && (
+                            <span className="text-[11px] text-emerald-600 font-medium ml-1">done</span>
+                          )}
+                          {hasSummary && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <MessageSquareText className="h-3 w-3 shrink-0 text-muted-foreground/50 cursor-pointer" />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-[320px] text-left bg-popover text-popover-foreground shadow-lg sidebar-summary-popover">
+                                <Markdown>{task.summary!}</Markdown>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          <RefreshCw
+                            className={`h-3 w-3 shrink-0 text-muted-foreground/30 hover:text-primary cursor-pointer ${isSummarizing ? "animate-spin" : ""}`}
+                            onClick={(e) => handleSummarize(e, task.id, folder.id)}
+                          />
+                          <X
+                            className="h-3 w-3 shrink-0 text-muted-foreground/30 hover:text-destructive cursor-pointer"
+                            onClick={(e) => handleTaskDelete(e, task.id, folder.id)}
+                          />
+                        </div>
                       </div>
                     );
                   })}

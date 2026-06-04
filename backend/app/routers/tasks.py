@@ -1,4 +1,3 @@
-import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..models import TaskORM
 from ..schemas.models import Task, TaskCreate, TaskUpdate
+from ..services.client_manager import client_manager
+from ..services.history import get_history, extract_plain_text
+from ..services.summarizer import summarize_text
 
 router = APIRouter(prefix="/api")
 
 
 def _task_from_orm(t: TaskORM) -> Task:
-    plan_paths = json.loads(t.plan_paths or "[]")
-    return Task(id=t.id, name=t.name, folder_id=t.folder_id, plan_paths=plan_paths)
+    return Task(id=t.id, name=t.name, folder_id=t.folder_id, summary=t.summary)
 
 
 @router.get("/tasks", response_model=list[Task])
@@ -63,3 +64,27 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
     await db.delete(task)
     await db.commit()
+
+
+@router.get("/plans/{task_id}", response_model=list[str])
+async def get_plans(task_id: str):
+    return client_manager.get_plans(task_id)
+
+
+@router.post("/tasks/{task_id}/summarize")
+async def summarize_task(task_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(TaskORM).where(TaskORM.id == task_id))
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    messages = await get_history(db, task_id)
+    if not messages:
+        raise HTTPException(status_code=400, detail="No conversation history found")
+
+    plain_text = extract_plain_text(messages)
+    summary = await summarize_text(plain_text)
+    if summary:
+        task.summary = summary
+        await db.commit()
+    return {"summary": summary}

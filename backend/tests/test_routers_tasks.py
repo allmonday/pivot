@@ -21,7 +21,6 @@ async def test_create_and_get_task(client):
     data = resp.json()
     assert data["name"] == "Test Task"
     assert data["folder_id"] == folder_id
-    assert data["plan_paths"] == []
     task_id = data["id"]
 
     # Get all tasks

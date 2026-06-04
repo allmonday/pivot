@@ -252,6 +252,22 @@ export async function interruptStream(taskId: string): Promise<void> {
   await fetch(`${BASE}/interrupt/${taskId}`, { method: "POST" });
 }
 
+// Plan APIs
+
+export async function fetchPlans(taskId: string): Promise<string[]> {
+  const res = await fetch(`${BASE}/plans/${taskId}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// Summary API
+
+export async function summarizeTask(taskId: string): Promise<{ summary: string | null }> {
+  const res = await fetch(`${BASE}/tasks/${taskId}/summarize`, { method: "POST" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 // 权限审批
 export async function resolvePermission(
   taskId: string,

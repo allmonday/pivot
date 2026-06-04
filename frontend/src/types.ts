@@ -14,7 +14,7 @@ export interface Task {
   id: string;
   name: string;
   folder_id: string;
-  plan_paths: string[];
+  summary?: string | null;
 }
 
 export interface TaskCreate {

@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     max_images_per_message: int = 5
     max_turns: int = 50
 
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

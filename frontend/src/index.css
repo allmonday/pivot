@@ -199,3 +199,14 @@ body {
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(0 0% 80%); border-radius: 3px; }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: hsl(0 0% 67%); }
+
+/* Sidebar summary hover popover */
+.sidebar-summary-popover > :last-child { display: none !important; }
+.sidebar-summary-popover { font-size: 12px; line-height: 1.6; }
+.sidebar-summary-popover p { margin: 0 0 4px; }
+.sidebar-summary-popover p:last-child { margin-bottom: 0; }
+.sidebar-summary-popover ul, .sidebar-summary-popover ol { margin: 0 0 4px; padding-left: 1.2em; }
+.sidebar-summary-popover li { margin: 0; }
+.sidebar-summary-popover strong { font-weight: 600; }
+.sidebar-summary-popover em { font-style: italic; }
+.sidebar-summary-popover code { font-size: 11px; background: hsl(0 0% 90%); padding: 0 3px; border-radius: 3px; }

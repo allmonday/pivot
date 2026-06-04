@@ -4,7 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
-import { fetchFolders, fetchTasks } from "./api";
+import { fetchFolders, fetchTasks, fetchPlans } from "./api";
 import { useChatSession } from "./hooks/useChatSession";
 import { useTaskActivity } from "./hooks/useTaskActivity";
 import { useLayout } from "./hooks/useLayout";
@@ -29,6 +29,7 @@ function setParamsInUrl(folderId: string | null, taskId: string | null) {
 export default function App() {
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [planPaths, setPlanPaths] = useState<string[]>([]);
 
   const chatSession = useChatSession();
   const activity = useTaskActivity(selectedTask?.id ?? null);
@@ -49,7 +50,9 @@ export default function App() {
     setParamsInUrl(task.folder_id, task.id);
     activity.clearDone(task.id);
     setSelectedTask(task);
-    layout.setPlanVisible(task.plan_paths.length > 0);
+    const plans = await fetchPlans(task.id);
+    setPlanPaths(plans);
+    layout.setPlanVisible(plans.length > 0);
     await chatSession.loadSession(task.id);
   };
 
@@ -59,10 +62,9 @@ export default function App() {
     } else {
       activity.markDone(taskId);
       if (selectedTask) {
-        fetchTasks().then((tasks) => {
-          const updated = tasks.find((t) => t.id === selectedTask.id);
-          if (updated && updated.plan_paths.length > selectedTask.plan_paths.length) {
-            setSelectedTask(updated);
+        fetchPlans(taskId).then((plans) => {
+          if (plans.length > planPaths.length) {
+            setPlanPaths(plans);
             layout.setPlanVisible(true);
           }
         });
@@ -88,7 +90,10 @@ export default function App() {
             if (folder) setSelectedFolder(folder);
           }
           setSelectedTask(task);
-          layout.setPlanVisible(task.plan_paths.length > 0);
+          fetchPlans(task.id).then((plans) => {
+            setPlanPaths(plans);
+            layout.setPlanVisible(plans.length > 0);
+          });
           chatSession.loadSession(task.id);
         }
       }
@@ -121,7 +126,7 @@ export default function App() {
                 onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
                 planVisible={layout.planVisible}
                 onTogglePlan={layout.togglePlan}
-                hasPlan={selectedTask.plan_paths.length > 0}
+                hasPlan={planPaths.length > 0}
                 historyVisible={layout.historyVisible}
                 onToggleHistory={layout.toggleHistory}
               />
@@ -147,7 +152,7 @@ export default function App() {
               />
             )}
             <PlanPanel
-              planPaths={selectedTask.plan_paths}
+              planPaths={planPaths}
               folderPath={selectedFolder?.folder_path ?? null}
               visible={layout.planVisible}
               onClose={layout.closePlan}
