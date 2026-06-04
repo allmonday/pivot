@@ -260,19 +260,9 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             variant={planVisible ? "default" : "outline"}
             size="sm"
             onClick={onTogglePlan}
-            className="ml-2 h-6 text-xs"
+            className="h-6 text-xs"
           >
             Plan
-          </Button>
-        )}
-        {sessionId && (
-          <Button
-            variant={historyVisible ? "default" : "outline"}
-            size="sm"
-            onClick={onToggleHistory}
-            className="ml-auto h-6 text-xs"
-          >
-            History
           </Button>
         )}
         {hasFolder && (
@@ -280,9 +270,19 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             variant={fileExplorerVisible ? "default" : "outline"}
             size="sm"
             onClick={onToggleFileExplorer}
-            className={sessionId ? "h-6 text-xs" : "ml-auto h-6 text-xs"}
+            className="h-6 text-xs"
           >
             Files
+          </Button>
+        )}
+        {sessionId && (
+          <Button
+            variant={historyVisible ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleHistory}
+            className="h-6 text-xs"
+          >
+            History
           </Button>
         )}
       </div>
