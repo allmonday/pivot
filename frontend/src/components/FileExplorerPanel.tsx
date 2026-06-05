@@ -3,8 +3,9 @@ import type { FileInfo } from "../types";
 import { fetchFiles, fetchFileContent } from "../api";
 import { X, FolderIcon, FileText, ChevronRight, ChevronDown, Columns2, Rows2 } from "lucide-react";
 import type { FileExplorerLayout } from "../hooks/useLayout";
+import { ResizeHandle } from "./ui/resize-handle";
 import Editor from "@monaco-editor/react";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { MarkdownRenderer, MermaidBlock } from "./MarkdownRenderer";
 
 interface Props {
   folderPath: string | null;
@@ -165,8 +166,8 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height, layout
       </div>
 
       {/* Resize handle */}
-      <div
-        className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+      <ResizeHandle
+        direction="horizontal"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
@@ -196,6 +197,10 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height, layout
                 <div className="markdown-body max-w-full">
                   <MarkdownRenderer content={selectedFile.content} />
                 </div>
+              </div>
+            ) : selectedFile.path.endsWith(".mmd") ? (
+              <div className="flex-1 overflow-auto p-4 scrollbar-thin">
+                <MermaidBlock code={selectedFile.content} />
               </div>
             ) : (
             <div className="flex-1">

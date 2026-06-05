@@ -3,6 +3,7 @@ import type { Task, Folder } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
+import { ResizeHandle } from "./components/ui/resize-handle";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { fetchFolders, fetchTasks, fetchPlans } from "./api";
@@ -146,8 +147,8 @@ export default function App() {
                 />
               </div>
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (
-                <div
-                  className="h-px cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                <ResizeHandle
+                  direction="vertical"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     const startY = e.clientY;
@@ -166,8 +167,8 @@ export default function App() {
                 />
               )}
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "horizontal" && (
-                <div
-                  className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                <ResizeHandle
+                  direction="horizontal"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     const startX = e.clientX;
@@ -195,8 +196,8 @@ export default function App() {
               />
             </div>
             {layout.planVisible && (
-              <div
-                className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+              <ResizeHandle
+                direction="horizontal"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startX = e.clientX;
@@ -223,8 +224,8 @@ export default function App() {
               width={layout.planWidth}
             />
             {layout.historyVisible && (
-              <div
-                className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+              <ResizeHandle
+                direction="horizontal"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startX = e.clientX;

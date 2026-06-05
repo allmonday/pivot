@@ -465,7 +465,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         <div className="flex rounded-full overflow-hidden border border-border bg-muted shrink-0 self-center">
           <button
             className={`px-3.5 py-1.5 text-[13px] border-none cursor-pointer transition-colors ${
-              mode === "plan" ? "bg-orange-500 text-white font-semibold" : "bg-transparent text-muted-foreground"
+              mode === "plan" ? "bg-green-700 text-white font-semibold" : "bg-transparent text-muted-foreground"
             } ${streaming ? "opacity-60 cursor-default" : ""}`}
             onClick={() => setMode("plan")}
             disabled={streaming}
