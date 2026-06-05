@@ -7,7 +7,7 @@ import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
 import { SlashCommandMenu, type SlashCommand } from "./SlashCommandMenu";
 import { Button } from "@/components/ui/button";
-import { Paperclip, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Paperclip, X } from "lucide-react";
 
 interface Props {
   taskId: string;
@@ -15,6 +15,8 @@ interface Props {
   initialMessages: ChatMessage[];
   onSessionIdChange: (id: string) => void;
   onStreamingChange: (streaming: boolean) => void;
+  sidebarVisible: boolean;
+  onToggleSidebar: () => void;
   planVisible: boolean;
   onTogglePlan: () => void;
   hasPlan: boolean;
@@ -74,7 +76,7 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, sidebarVisible, onToggleSidebar, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath }: Props) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
@@ -323,6 +325,15 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     <div className="flex flex-col h-full bg-background">
       {/* Header bar */}
       <div className="px-4 h-12 border-b flex items-center shrink-0 gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleSidebar}
+          className="h-6 w-6 mr-1"
+          title={sidebarVisible ? "收起侧边栏" : "展开侧边栏"}
+        >
+          {sidebarVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </Button>
         {hasPlan && (
           <Button
             variant={planVisible ? "default" : "outline"}
@@ -363,6 +374,15 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             label="CLI"
           />
         )}
+        <div className="flex-1" />
+        <div className="flex justify-center min-w-0">
+          {folderPath && (
+            <span className="text-xs text-muted-foreground font-mono truncate max-w-[50vw]" title={folderPath}>
+              {folderPath}
+            </span>
+          )}
+        </div>
+        <div className="flex-1" />
       </div>
 
       {/* Messages */}

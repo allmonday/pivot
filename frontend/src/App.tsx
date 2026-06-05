@@ -104,15 +104,19 @@ export default function App() {
 
   return (
     <div className="flex h-screen font-sans">
-      <div className="w-[280px] border-r border-border overflow-auto bg-muted/50 shrink-0">
-        <Sidebar
-          selectedFolderId={selectedFolder?.id ?? null}
-          selectedTaskId={selectedTask?.id ?? null}
-          workingTaskIds={activity.workingTaskIds}
-          doneTaskIds={activity.doneTaskIds}
-          onSelectFolder={handleFolderSelect}
-          onSelectTask={handleTaskSelect}
-        />
+      <div
+        className={`border-r border-border overflow-auto bg-muted/50 shrink-0 transition-[width] duration-200 ${layout.sidebarVisible ? "w-[280px]" : "w-0"}`}
+      >
+        <div className="w-[280px] min-w-[280px]">
+          <Sidebar
+            selectedFolderId={selectedFolder?.id ?? null}
+            selectedTaskId={selectedTask?.id ?? null}
+            workingTaskIds={activity.workingTaskIds}
+            doneTaskIds={activity.doneTaskIds}
+            onSelectFolder={handleFolderSelect}
+            onSelectTask={handleTaskSelect}
+          />
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0">
@@ -126,6 +130,8 @@ export default function App() {
                   initialMessages={chatSession.initialMessages}
                   onSessionIdChange={chatSession.setSessionId}
                   onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
+                  sidebarVisible={layout.sidebarVisible}
+                  onToggleSidebar={layout.toggleSidebar}
                   planVisible={layout.planVisible}
                   onTogglePlan={layout.togglePlan}
                   hasPlan={planPaths.length > 0}
@@ -141,7 +147,7 @@ export default function App() {
               </div>
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (
                 <div
-                  className="h-1 cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
+                  className="h-px cursor-row-resize bg-border shrink-0 transition-colors hover:bg-primary"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     const startY = e.clientY;
@@ -168,7 +174,7 @@ export default function App() {
                     const startWidth = layout.fileExplorerHeight;
                     const onMove = (ev: MouseEvent) => {
                       const delta = startX - ev.clientX;
-                      layout.setFileExplorerHeight(Math.max(200, Math.min(window.innerWidth * 0.7, startWidth + delta)));
+                      layout.setFileExplorerHeight(Math.max(200, Math.min(window.innerWidth * 0.8, startWidth + delta)));
                     };
                     const onUp = () => {
                       document.removeEventListener("mousemove", onMove);
@@ -197,7 +203,7 @@ export default function App() {
                   const startWidth = layout.planWidth;
                   const onMove = (ev: MouseEvent) => {
                     const delta = startX - ev.clientX;
-                    layout.setPlanWidth(Math.max(250, Math.min(800, startWidth + delta)));
+                    layout.setPlanWidth(Math.max(250, Math.min(window.innerWidth * 0.8, startWidth + delta)));
                   };
                   const onUp = () => {
                     document.removeEventListener("mousemove", onMove);
@@ -225,7 +231,7 @@ export default function App() {
                   const startWidth = layout.historyWidth;
                   const onMove = (ev: MouseEvent) => {
                     const delta = startX - ev.clientX;
-                    layout.setHistoryWidth(Math.max(300, Math.min(800, startWidth + delta)));
+                    layout.setHistoryWidth(Math.max(300, Math.min(window.innerWidth * 0.8, startWidth + delta)));
                   };
                   const onUp = () => {
                     document.removeEventListener("mousemove", onMove);

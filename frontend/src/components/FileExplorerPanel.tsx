@@ -102,6 +102,7 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height, layout
   const [rootFiles, setRootFiles] = useState<FileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [treeWidth, setTreeWidth] = useState(200);
 
   useEffect(() => {
     if (!folderPath) return;
@@ -129,7 +130,7 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height, layout
       style={isVertical ? { height } : { width: height }}
     >
       {/* File tree */}
-      <div className="w-[200px] shrink-0 border-r border-border flex flex-col">
+      <div className="shrink-0 flex flex-col" style={{ width: treeWidth }}>
         <div className="px-3 py-2 border-b border-border flex justify-between items-center bg-background">
           <span className="text-[13px] font-semibold text-foreground">Files</span>
           <div className="flex items-center gap-1">
@@ -162,6 +163,26 @@ export function FileExplorerPanel({ folderPath, visible, onClose, height, layout
           ))}
         </div>
       </div>
+
+      {/* Resize handle */}
+      <div
+        className="w-1 cursor-col-resize bg-border shrink-0 transition-colors hover:bg-primary"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startWidth = treeWidth;
+          const onMove = (ev: MouseEvent) => {
+            const delta = ev.clientX - startX;
+            setTreeWidth(Math.max(120, Math.min(500, startWidth + delta)));
+          };
+          const onUp = () => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        }}
+      />
 
       {/* Editor */}
       <div className="flex-1 flex flex-col min-w-0">
