@@ -11,6 +11,8 @@ export function useLayout() {
   const [fileExplorerVisible, setFileExplorerVisible] = useState(false);
   const [fileExplorerHeight, setFileExplorerHeight] = useState(300);
   const [fileExplorerLayout, setFileExplorerLayout] = useState<FileExplorerLayout>("vertical");
+  const [terminalVisible, setTerminalVisible] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(250);
 
   const toggleSidebar = () => setSidebarVisible((v) => !v);
   const togglePlan = () => setPlanVisible((v) => !v);
@@ -21,6 +23,8 @@ export function useLayout() {
   const closeFileExplorer = () => setFileExplorerVisible(false);
   const toggleFileExplorerLayout = () =>
     setFileExplorerLayout((v) => (v === "vertical" ? "horizontal" : "vertical"));
+  const toggleTerminal = () => setTerminalVisible((v) => !v);
+  const closeTerminal = () => setTerminalVisible(false);
 
   return {
     sidebarVisible,
@@ -45,5 +49,11 @@ export function useLayout() {
     toggleFileExplorerLayout,
     toggleFileExplorer,
     closeFileExplorer,
+    terminalVisible,
+    setTerminalVisible,
+    terminalHeight,
+    setTerminalHeight,
+    toggleTerminal,
+    closeTerminal,
   };
 }

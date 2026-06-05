@@ -3,6 +3,7 @@ import type { Task, Folder } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
+import { TerminalPanel } from "./components/TerminalPanel";
 import { ResizeHandle } from "./components/ui/resize-handle";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
@@ -58,9 +59,13 @@ export default function App() {
     await chatSession.loadSession(task.id);
   };
 
+  const handleOpenTerminal = () => {
+    layout.toggleTerminal();
+  };
+
   const handleStreamingChange = (taskId: string, streaming: boolean) => {
     if (streaming) {
-      activity.markWorking(taskId);
+      activity.markWorking(taskId, selectedTask?.name);
     } else {
       activity.markDone(taskId);
       if (selectedTask) {
@@ -122,6 +127,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-h-0">
         {selectedTask ? (
+          <>
           <div className="flex-1 flex min-h-0">
             <div className={`flex-1 flex min-h-0 overflow-hidden ${layout.fileExplorerVisible && layout.fileExplorerLayout === "horizontal" ? "flex-row" : "flex-col"}`}>
               <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -144,6 +150,8 @@ export default function App() {
                   onToggleFileExplorerLayout={layout.toggleFileExplorerLayout}
                   hasFolder={!!selectedFolder}
                   folderPath={selectedFolder?.folder_path ?? null}
+                  terminalVisible={layout.terminalVisible}
+                  onOpenTerminal={handleOpenTerminal}
                 />
               </div>
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (
@@ -250,6 +258,34 @@ export default function App() {
               width={layout.historyWidth}
             />
           </div>
+          {layout.terminalVisible && (
+            <ResizeHandle
+              direction="vertical"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startY = e.clientY;
+                const startHeight = layout.terminalHeight;
+                const onMove = (ev: MouseEvent) => {
+                  const delta = startY - ev.clientY;
+                  layout.setTerminalHeight(Math.max(150, Math.min(500, startHeight + delta)));
+                };
+                const onUp = () => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                };
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
+            />
+          )}
+          <TerminalPanel
+            taskId={selectedTask.id}
+            folderPath={selectedFolder?.folder_path ?? null}
+            visible={layout.terminalVisible}
+            onClose={layout.closeTerminal}
+            height={layout.terminalHeight}
+          />
+        </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             选择一个任务开始对话

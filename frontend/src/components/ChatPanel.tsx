@@ -26,24 +26,8 @@ interface Props {
   onToggleFileExplorer: () => void;
   hasFolder: boolean;
   folderPath: string | null;
-}
-
-function CopyButton({ getValue, label }: { getValue: () => string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-6 text-xs"
-      onClick={() => {
-        navigator.clipboard.writeText(getValue());
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-    >
-      {copied ? "Copied!" : label}
-    </Button>
-  );
+  terminalVisible: boolean;
+  onOpenTerminal: () => void;
 }
 
 const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -76,7 +60,7 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, sidebarVisible, onToggleSidebar, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, sidebarVisible, onToggleSidebar, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath, terminalVisible, onOpenTerminal }: Props) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
@@ -365,14 +349,16 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
           </Button>
         )}
         {sessionId && (
-          <CopyButton
-            getValue={() => {
-              return folderPath
-                ? `cd ${folderPath} && claude --resume ${sessionId}`
-                : `claude --resume ${sessionId}`;
+          <Button
+            variant={terminalVisible ? "default" : "outline"}
+            size="sm"
+            className="h-6 text-xs"
+            onClick={() => {
+              onOpenTerminal();
             }}
-            label="CLI"
-          />
+          >
+            Terminal
+          </Button>
         )}
         <div className="flex-1" />
         <div className="flex justify-center min-w-0">

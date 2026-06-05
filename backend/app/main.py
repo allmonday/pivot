@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db
 from .exceptions import unhandled_exception_handler
-from .routers import chat, files, folders, messages, permissions, sessions, tasks
+from .routers import chat, files, folders, messages, permissions, sessions, tasks, terminal
 from .services.client_manager import client_manager
 
 logging.basicConfig(
@@ -25,6 +25,8 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down, cleaning up %d client(s)", len(client_manager._clients))
     await client_manager.shutdown_all()
+    from .routers.terminal import shutdown_all_terminals
+    await shutdown_all_terminals()
 
 
 app = FastAPI(title="Pivot", lifespan=lifespan)
@@ -44,3 +46,4 @@ app.include_router(sessions.router)
 app.include_router(messages.router)
 app.include_router(chat.router)
 app.include_router(permissions.router)
+app.include_router(terminal.router)
