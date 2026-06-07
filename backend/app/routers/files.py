@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
+from ..config import settings
 from ..schemas.models import FileInfo, FileContentResponse, PlanFile
 
 router = APIRouter(prefix="/api")
@@ -33,7 +34,7 @@ async def get_file_content(path: str = Query(...)):
     target = Path(path).resolve()
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    if target.stat().st_size > 1024 * 1024:
+    if target.stat().st_size > settings.max_file_read_size:
         raise HTTPException(status_code=400, detail="File too large")
     return FileContentResponse(content=target.read_text(encoding="utf-8"))
 

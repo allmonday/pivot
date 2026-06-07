@@ -12,6 +12,8 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..config import settings
+
 logger = logging.getLogger("pivot.terminal")
 router = APIRouter(prefix="/api")
 
@@ -88,7 +90,7 @@ class TerminalSession:
 
     def _blocking_read(self) -> bytes | None:
         try:
-            data = os.read(self.master_fd, 65536)
+            data = os.read(self.master_fd, settings.terminal_buffer_size)
             if not data:
                 return None
             return data
@@ -177,8 +179,8 @@ async def terminal_ws(websocket: WebSocket, task_id: str) -> None:
             if msg_type == "input":
                 await session.write(data.get("data", ""))
             elif msg_type == "resize":
-                cols = data.get("cols", 80)
-                rows = data.get("rows", 24)
+                cols = data.get("cols", settings.terminal_default_cols)
+                rows = data.get("rows", settings.terminal_default_rows)
                 await session.resize(int(cols), int(rows))
     except WebSocketDisconnect:
         pass

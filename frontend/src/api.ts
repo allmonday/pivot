@@ -76,6 +76,13 @@ export async function fetchMessages(taskId: string): Promise<ChatMessage[]> {
   }));
 }
 
+export async function checkHasCompact(taskId: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/has-compact/${taskId}`);
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.has_compact ?? false;
+}
+
 export async function fetchFullHistory(taskId: string): Promise<ChatMessage[]> {
   const res = await fetch(`${BASE}/full-history/${taskId}`);
   if (!res.ok) return [];

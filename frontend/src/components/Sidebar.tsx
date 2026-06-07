@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Folder, Task } from "../types";
-import { fetchFolders, fetchTasks, createFolder, createTask, deleteFolder, deleteTask, summarizeTask } from "../api";
+import { useFolderTree } from "../hooks/useFolderTree";
 import { FolderPicker } from "./FolderPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +20,20 @@ interface Props {
 }
 
 export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, doneTaskIds, onSelectFolder, onSelectTask }: Props) {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [tasksMap, setTasksMap] = useState<Record<string, Task[]>>({});
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const {
+    folders,
+    tasksMap,
+    expandedFolderIds,
+    summarizingTaskId,
+    toggleFolder,
+    addFolder,
+    removeFolder,
+    addTask,
+    removeTask,
+    summarize,
+  } = useFolderTree();
 
+  // Form state
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderPath, setFolderPath] = useState("");
@@ -35,31 +45,8 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
   const [newTaskName, setNewTaskName] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
 
-  const [summarizingTaskId, setSummarizingTaskId] = useState<string | null>(null);
-
-  const reloadFolders = () => fetchFolders().then(setFolders).catch(console.error);
-
-  const reloadTasks = (folderId: string) => {
-    fetchTasks(folderId).then((tasks) => setTasksMap((prev) => ({ ...prev, [folderId]: tasks }))).catch(console.error);
-  };
-
-  useEffect(() => {
-    fetchFolders().then((fetchedFolders) => {
-      setFolders(fetchedFolders);
-      setExpandedFolderIds(new Set(fetchedFolders.map((f) => f.id)));
-      fetchedFolders.forEach((f) => reloadTasks(f.id));
-    }).catch(console.error);
-  }, []);
-
   const handleFolderClick = (folder: Folder) => {
-    const isCurrentlyExpanded = expandedFolderIds.has(folder.id);
-    if (isCurrentlyExpanded) {
-      setExpandedFolderIds((prev) => { const next = new Set(prev); next.delete(folder.id); return next; });
-    } else {
-      setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
-      onSelectFolder(folder);
-      if (!(folder.id in tasksMap)) reloadTasks(folder.id);
-    }
+    toggleFolder(folder, onSelectFolder);
   };
 
   const handleFolderCreate = async () => {
@@ -67,11 +54,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     setCreatingFolder(true);
     try {
       const names = taskNames.split("\n").map((n) => n.trim()).filter(Boolean);
-      const folder = await createFolder({ name: folderName.trim(), folder_path: folderPath.trim(), task_names: names });
-      await reloadFolders();
-      setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
-      reloadTasks(folder.id);
-      onSelectFolder(folder);
+      await addFolder({ name: folderName.trim(), folder_path: folderPath.trim(), task_names: names }, onSelectFolder);
       setFolderName("");
       setFolderPath("");
       setTaskNames("");
@@ -87,9 +70,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     e.stopPropagation();
     if (!confirm("确认删除此文件夹及其所有任务？")) return;
     try {
-      await deleteFolder(folderId);
-      if (expandedFolderIds.has(folderId)) setExpandedFolderIds((prev) => { const next = new Set(prev); next.delete(folderId); return next; });
-      await reloadFolders();
+      await removeFolder(folderId);
     } catch (err) {
       console.error(err);
     }
@@ -99,9 +80,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     if (!newTaskName.trim() || !addingTaskForFolder) return;
     setCreatingTask(true);
     try {
-      const task = await createTask({ name: newTaskName.trim(), folder_id: addingTaskForFolder });
-      await reloadTasks(addingTaskForFolder);
-      onSelectTask(task);
+      await addTask({ name: newTaskName.trim(), folder_id: addingTaskForFolder }, onSelectTask);
       setNewTaskName("");
       setAddingTaskForFolder(null);
     } catch (e) {
@@ -115,8 +94,7 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     e.stopPropagation();
     if (!confirm("确认删除此任务？")) return;
     try {
-      await deleteTask(taskId);
-      await reloadTasks(folderId);
+      await removeTask(taskId, folderId);
     } catch (err) {
       console.error(err);
     }
@@ -128,22 +106,9 @@ export function Sidebar({ selectedFolderId, selectedTaskId, workingTaskIds, done
     setNewTaskName("");
   };
 
-  const handleSummarize = async (e: React.MouseEvent, taskId: string, folderId: string) => {
+  const handleSummarize = (e: React.MouseEvent, taskId: string, folderId: string) => {
     e.stopPropagation();
-    setSummarizingTaskId(taskId);
-    try {
-      const result = await summarizeTask(taskId);
-      setTasksMap((prev) => ({
-        ...prev,
-        [folderId]: (prev[folderId] || []).map((t) =>
-          t.id === taskId ? { ...t, summary: result.summary } : t
-        ),
-      }));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSummarizingTaskId(null);
-    }
+    summarize(taskId, folderId);
   };
 
   return (

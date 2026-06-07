@@ -1,9 +1,6 @@
 import { useRef, useState } from "react";
 import type { ImageAttachment } from "../types";
-
-const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const MAX_IMAGES = 5;
+import { VALID_IMAGE_TYPES, MAX_IMAGE_SIZE, MAX_IMAGES } from "../constants";
 
 function fileToAttachment(file: File): Promise<ImageAttachment> {
   return new Promise((resolve, reject) => {

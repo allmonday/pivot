@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ImageAttachment } from "../types";
 import type { SlashCommand } from "./SlashCommandMenu";
 import { SlashCommandMenu } from "./SlashCommandMenu";
+import { VALID_IMAGE_ACCEPT } from "../constants";
 import { X, Paperclip } from "lucide-react";
 
 const SLASH_MENU_POSITION = { top: 0, left: 42 };
@@ -117,7 +118,7 @@ export function ChatInput({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
+          accept={VALID_IMAGE_ACCEPT}
           multiple
           className="hidden"
           onChange={onFileSelect}

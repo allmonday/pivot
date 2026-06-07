@@ -1,4 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  DEFAULT_PLAN_WIDTH,
+  DEFAULT_HISTORY_WIDTH,
+  DEFAULT_FILE_EXPLORER_HEIGHT,
+  DEFAULT_TERMINAL_HEIGHT,
+} from "../constants";
 
 export type FileExplorerLayout = "horizontal" | "vertical";
 
@@ -38,14 +44,14 @@ const LayoutContext = createContext<LayoutState | null>(null);
 export function LayoutProvider({ children }: { children: ReactNode }) {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [planVisible, setPlanVisible] = useState(false);
-  const [planWidth, setPlanWidth] = useState(400);
+  const [planWidth, setPlanWidth] = useState(DEFAULT_PLAN_WIDTH);
   const [historyVisible, setHistoryVisible] = useState(false);
-  const [historyWidth, setHistoryWidth] = useState(500);
+  const [historyWidth, setHistoryWidth] = useState(DEFAULT_HISTORY_WIDTH);
   const [fileExplorerVisible, setFileExplorerVisible] = useState(false);
-  const [fileExplorerHeight, setFileExplorerHeight] = useState(300);
+  const [fileExplorerHeight, setFileExplorerHeight] = useState(DEFAULT_FILE_EXPLORER_HEIGHT);
   const [fileExplorerLayout, setFileExplorerLayout] = useState<FileExplorerLayout>("vertical");
   const [terminalVisible, setTerminalVisible] = useState(false);
-  const [terminalHeight, setTerminalHeight] = useState(250);
+  const [terminalHeight, setTerminalHeight] = useState(DEFAULT_TERMINAL_HEIGHT);
 
   const toggleSidebar = () => setSidebarVisible((v) => !v);
   const togglePlan = () => setPlanVisible((v) => !v);

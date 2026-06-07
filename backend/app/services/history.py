@@ -240,6 +240,34 @@ def extract_plain_text(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def has_compact_summary(entries: list[dict]) -> bool:
+    """Return True if any entry in the transcript is a compact summary."""
+    return any(e.get("isCompactSummary") for e in entries)
+
+
+async def check_has_compact(db: AsyncSession, task_id: str) -> bool:
+    """Check whether the task's session transcript contains compact summaries."""
+    from claude_agent_sdk._internal.sessions import (
+        _parse_transcript_entries,
+        _read_session_file,
+    )
+
+    session_id = await session_repo.get_session_id(db, task_id)
+    if not session_id:
+        return False
+
+    directory = await task_repo.get_folder_path(db, task_id)
+
+    try:
+        content = _read_session_file(session_id, directory)
+        if not content:
+            return False
+        entries = _parse_transcript_entries(content)
+        return has_compact_summary(entries)
+    except Exception:
+        return False
+
+
 async def get_full_history(db: AsyncSession, task_id: str) -> list[dict]:
     # NOTE: Uses internal SDK API (underscore-prefixed modules).
     # These are not part of the public API and may break on SDK upgrades.

@@ -26,7 +26,7 @@ async def summarize_text(text: str) -> str | None:
         return None
 
     # 截断过长文本（DeepSeek context 约 64k，预留 prompt 和输出空间）
-    max_chars = 100_000
+    max_chars = settings.summary_max_chars
     if len(text) > max_chars:
         text = text[:max_chars]
 
@@ -42,7 +42,7 @@ async def summarize_text(text: str) -> str | None:
                         {"role": "user", "content": text},
                     ],
                     "temperature": 0.1,
-                    "max_tokens": 500,
+                    "max_tokens": settings.summary_max_tokens,
                 },
             )
             resp.raise_for_status()

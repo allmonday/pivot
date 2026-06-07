@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Task, Folder } from "./types";
+import {
+  SIDEBAR_WIDTH,
+  FILE_EXPLORER_MIN_HEIGHT, FILE_EXPLORER_MAX_HEIGHT, FILE_EXPLORER_MIN_WIDTH,
+  PLAN_PANEL_MIN_WIDTH, HISTORY_PANEL_MIN_WIDTH,
+  TERMINAL_MIN_HEIGHT, TERMINAL_MAX_HEIGHT,
+  PANEL_MAX_WIDTH_RATIO,
+} from "./constants";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
 import { PlanPanel } from "./components/PlanPanel";
@@ -51,40 +58,40 @@ function AppContent() {
     direction: "vertical",
     size: layout.fileExplorerHeight,
     onSizeChange: layout.setFileExplorerHeight,
-    min: 150,
-    max: 600,
+    min: FILE_EXPLORER_MIN_HEIGHT,
+    max: FILE_EXPLORER_MAX_HEIGHT,
   });
 
   const fileExplorerHorizontalResize = useResizable({
     direction: "horizontal",
     size: layout.fileExplorerHeight,
     onSizeChange: layout.setFileExplorerHeight,
-    min: 200,
-    max: useMemo(() => window.innerWidth * 0.8, []),
+    min: FILE_EXPLORER_MIN_WIDTH,
+    max: useMemo(() => window.innerWidth * PANEL_MAX_WIDTH_RATIO, []),
   });
 
   const planResize = useResizable({
     direction: "horizontal",
     size: layout.planWidth,
     onSizeChange: layout.setPlanWidth,
-    min: 250,
-    max: useMemo(() => window.innerWidth * 0.8, []),
+    min: PLAN_PANEL_MIN_WIDTH,
+    max: useMemo(() => window.innerWidth * PANEL_MAX_WIDTH_RATIO, []),
   });
 
   const historyResize = useResizable({
     direction: "horizontal",
     size: layout.historyWidth,
     onSizeChange: layout.setHistoryWidth,
-    min: 300,
-    max: useMemo(() => window.innerWidth * 0.8, []),
+    min: HISTORY_PANEL_MIN_WIDTH,
+    max: useMemo(() => window.innerWidth * PANEL_MAX_WIDTH_RATIO, []),
   });
 
   const terminalResize = useResizable({
     direction: "vertical",
     size: layout.terminalHeight,
     onSizeChange: layout.setTerminalHeight,
-    min: 150,
-    max: 500,
+    min: TERMINAL_MIN_HEIGHT,
+    max: TERMINAL_MAX_HEIGHT,
   });
 
   const handleFolderSelect = (folder: Folder) => {
@@ -169,9 +176,10 @@ function AppContent() {
   return (
     <div className="flex h-screen font-sans">
       <div
-        className={`border-r border-border overflow-auto bg-muted/50 shrink-0 transition-[width] duration-200 ${layout.sidebarVisible ? "w-[280px]" : "w-0"}`}
+        className="border-r border-border overflow-auto bg-muted/50 shrink-0 transition-[width] duration-200"
+        style={{ width: layout.sidebarVisible ? SIDEBAR_WIDTH : 0 }}
       >
-        <div className="w-[280px] min-w-[280px]">
+        <div style={{ width: SIDEBAR_WIDTH, minWidth: SIDEBAR_WIDTH }}>
           <Sidebar
             selectedFolderId={selectedFolder?.id ?? null}
             selectedTaskId={selectedTask?.id ?? null}
@@ -197,6 +205,7 @@ function AppContent() {
                   onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
                   hasPlan={planPaths.length > 0}
                   hasFolder={!!selectedFolder}
+                  hasCompact={chatSession.hasCompact}
                   folderPath={selectedFolder?.folder_path ?? null}
                 />
               </div>

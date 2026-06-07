@@ -20,10 +20,11 @@ interface Props {
   onStreamingChange: (streaming: boolean) => void;
   hasPlan: boolean;
   hasFolder: boolean;
+  hasCompact: boolean;
   folderPath: string | null;
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, hasPlan, hasFolder, folderPath }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, hasPlan, hasFolder, hasCompact, folderPath }: Props) {
   const layout = useLayout();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
@@ -262,7 +263,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             Files
           </Button>
         )}
-        {sessionId && (
+        {hasCompact && (
           <Button
             variant={layout.historyVisible ? "default" : "outline"}
             size="sm"
