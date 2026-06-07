@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatMessage, ContentBlock, ImageAttachment } from "../types";
-import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission, fetchCommands } from "../api";
-import type { SlashCommand as SlashCommandType } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChatMessage, ContentBlock } from "../types";
+import { sendChat, reconnectStream, checkActiveStream, interruptStream } from "../api";
 import { useStreamEvents } from "../hooks/useStreamEvents";
+import { useImageAttachments } from "../hooks/useImageAttachments";
+import { useSlashCommands } from "../hooks/useSlashCommands";
 import { useLayout } from "../hooks/useLayout";
 import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
-import { SlashCommandMenu, type SlashCommand } from "./SlashCommandMenu";
+import { PermissionRequestDialog } from "./PermissionRequestDialog";
+import { ChatInput } from "./ChatInput";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeftOpen, Paperclip, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface Props {
   taskId: string;
@@ -21,52 +23,19 @@ interface Props {
   folderPath: string | null;
 }
 
-const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const MAX_IMAGES = 5;
-
-function fileToAttachment(file: File): Promise<ImageAttachment> {
-  return new Promise((resolve, reject) => {
-    if (!VALID_IMAGE_TYPES.includes(file.type)) {
-      reject(new Error(`Unsupported format: ${file.type}`));
-      return;
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      reject(new Error(`File too large: ${(file.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      resolve({
-        id: crypto.randomUUID(),
-        base64: dataUrl.split(",")[1],
-        mediaType: file.type,
-        previewUrl: dataUrl,
-        name: file.name || "clipboard.png",
-      });
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
-}
-
 export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, hasPlan, hasFolder, folderPath }: Props) {
   const layout = useLayout();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
-  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
-  const [slashFilter, setSlashFilter] = useState("");
-  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const abortRef = useRef<AbortController | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const activeTaskIdRef = useRef(taskId);
   activeTaskIdRef.current = taskId;
   const reconnectingTaskRef = useRef<string | null>(null);
+  // Monotonically increasing epoch — incremented on every stream reset so
+  // stale SSE callbacks (from the same task but a previous stream) are dropped.
+  const streamEpochRef = useRef(0);
 
   const {
     messages,
@@ -82,16 +51,31 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     resetStreamState,
   } = useStreamEvents();
 
+  const {
+    attachments,
+    fileInputRef,
+    handlePaste,
+    handleFileSelect,
+    removeAttachment,
+    clearAttachments,
+  } = useImageAttachments();
+
+  const {
+    slashMenuOpen,
+    setSlashMenuOpen,
+    slashFilter,
+    slashCommands,
+    handleInputChange: handleSlashInputChange,
+  } = useSlashCommands();
+
   // Sync initialMessages into the hook
   useEffect(() => {
-    // Don't disrupt an active SSE reconnection — it replays cached events
-    // and handles message state itself. This prevents a race where
-    // loadSession (returning [] for first conversations) aborts the reconnect.
     if (reconnectingTaskRef.current === taskId) {
       return;
     }
     abortRef.current?.abort();
     abortRef.current = null;
+    streamEpochRef.current += 1;
     resetStreamState();
     setMessages(initialMessages);
   }, [initialMessages, taskId]);
@@ -108,6 +92,8 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       if (cancelled) return;
       if (res.active) {
         reconnectingTaskRef.current = currentTaskId;
+        streamEpochRef.current += 1;
+        const epoch = streamEpochRef.current;
         setReconnecting(true);
         setStreaming(true);
         onStreamingChange(true);
@@ -116,6 +102,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
 
         const guard = <T extends unknown[]>(fn: (...args: T) => void) =>
           (...args: T) => {
+            if (streamEpochRef.current !== epoch) return;
             if (activeTaskIdRef.current !== currentTaskId) return;
             fn(...args);
           };
@@ -149,50 +136,10 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   }, [taskId]);
 
   useEffect(() => {
-    fetchCommands().then(setSlashCommands).catch(console.error);
-  }, []);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages, streamContent]);
 
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 160) + "px";
-    }
-  }, [input]);
-
-  const slashMenuPosition = useMemo(() => {
-    const el = textareaRef.current;
-    if (!el) return { top: 0, left: 42 };
-    return { top: el.offsetTop, left: 42 };
-  }, []);
-
-  const handleInputChange = (value: string) => {
-    setInput(value);
-    if (value.startsWith("/")) {
-      const spaceIdx = value.indexOf(" ");
-      const query = spaceIdx === -1 ? value.slice(1) : "";
-      if (spaceIdx === -1) {
-        setSlashFilter(query);
-        setSlashMenuOpen(true);
-      } else {
-        setSlashMenuOpen(false);
-      }
-    } else {
-      setSlashMenuOpen(false);
-    }
-  };
-
-  const handleSlashSelect = (cmd: SlashCommand) => {
-    setInput(cmd.name + " ");
-    setSlashMenuOpen(false);
-    textareaRef.current?.focus();
-  };
-
-  const doSend = (text: string, images?: ImageAttachment[]) => {
+  const doSend = (text: string, images?: typeof attachments) => {
     const sendTaskId = taskId;
     const content: ContentBlock[] = [];
     if (text.trim()) {
@@ -207,11 +154,19 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     }
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
+
+    // Abort any previous stream and bump epoch so stale callbacks are ignored
+    abortRef.current?.abort();
+    abortRef.current = null;
+    streamEpochRef.current += 1;
+    const epoch = streamEpochRef.current;
+
     resetStreamState();
     setStreaming(true);
     onStreamingChange(true);
 
     const onEvent = (eventType: string, data: Record<string, unknown>) => {
+      if (streamEpochRef.current !== epoch) return;
       if (activeTaskIdRef.current !== sendTaskId) return;
       if (eventType === "result" && data.session_id) {
         onSessionIdChange(data.session_id as string);
@@ -226,12 +181,14 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       mode,
       onEvent,
       (err) => {
+        if (streamEpochRef.current !== epoch) return;
         if (activeTaskIdRef.current !== sendTaskId) return;
         console.error(err);
         setStreaming(false);
         onStreamingChange(false);
       },
       () => {
+        if (streamEpochRef.current !== epoch) return;
         if (activeTaskIdRef.current !== sendTaskId) return;
         setStreaming(false);
         onStreamingChange(false);
@@ -255,7 +212,7 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     const text = input;
     const images = [...attachments];
     setInput("");
-    setAttachments([]);
+    clearAttachments();
     doSend(text, images);
   };
 
@@ -268,31 +225,6 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     accumulatedRef.current = [];
     resetStreamState();
     onStreamingChange(false);
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const imageFiles: File[] = [];
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file) imageFiles.push(file);
-      }
-    }
-    if (imageFiles.length > 0) {
-      e.preventDefault();
-      const newAttachments = await Promise.all(imageFiles.map(fileToAttachment));
-      setAttachments((prev) => [...prev, ...newAttachments].slice(0, MAX_IMAGES));
-    }
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    const newAttachments = await Promise.all(files.map(fileToAttachment));
-    setAttachments((prev) => [...prev, ...newAttachments].slice(0, MAX_IMAGES));
-    e.target.value = "";
   };
 
   const canSend = !streaming && (input.trim() || attachments.length > 0);
@@ -388,48 +320,11 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
             </div>
           )}
           {streaming && pendingPermission && (
-            <div className="mt-2.5 p-3 border border-amber-500 rounded-xl bg-amber-50">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-xs font-bold">!</span>
-                <span>{pendingPermission.title || `${pendingPermission.tool_name} permission`}</span>
-              </div>
-              {pendingPermission.description && (
-                <div className="mt-1.5 text-[13px] text-amber-800">{pendingPermission.description}</div>
-              )}
-              {pendingPermission.blocked_path && (
-                <div className="mt-1 text-xs font-mono text-amber-900 bg-amber-100 px-2 py-1 rounded">
-                  {pendingPermission.blocked_path}
-                </div>
-              )}
-              <div className="mt-2.5 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-semibold"
-                  onClick={async () => {
-                    try {
-                      await resolvePermission(taskId, pendingPermission.request_id, "allow");
-                    } catch { /* ignore */ }
-                    setPendingPermission(null);
-                  }}
-                >
-                  Allow
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-red-500 bg-red-50 text-red-900 hover:bg-red-100 font-semibold"
-                  onClick={async () => {
-                    try {
-                      await resolvePermission(taskId, pendingPermission.request_id, "deny");
-                    } catch { /* ignore */ }
-                    setPendingPermission(null);
-                  }}
-                >
-                  Deny
-                </Button>
-              </div>
-            </div>
+            <PermissionRequestDialog
+              taskId={taskId}
+              permission={pendingPermission}
+              onDismiss={() => setPendingPermission(null)}
+            />
           )}
           {!streaming && resultInfo && <ResultInfoBar info={resultInfo} />}
           <div ref={messagesEndRef} />
@@ -437,123 +332,26 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       </div>
 
       {/* Input */}
-      <div className="px-6 pb-6 flex justify-center items-end shrink-0 gap-5">
-        <div className="flex rounded-full overflow-hidden border border-border bg-muted shrink-0 self-center">
-          <button
-            className={`px-3.5 py-1.5 text-[13px] border-none cursor-pointer transition-colors ${
-              mode === "plan" ? "bg-green-700 text-white font-semibold" : "bg-transparent text-muted-foreground"
-            } ${streaming ? "opacity-60 cursor-default" : ""}`}
-            onClick={() => setMode("plan")}
-            disabled={streaming}
-          >
-            Plan
-          </button>
-          <button
-            className={`px-3.5 py-1.5 text-[13px] border-none cursor-pointer transition-colors ${
-              mode === "code" ? "bg-primary text-primary-foreground font-semibold" : "bg-transparent text-muted-foreground"
-            } ${streaming ? "opacity-60 cursor-default" : ""}`}
-            onClick={() => setMode("code")}
-            disabled={streaming}
-          >
-            Code
-          </button>
-        </div>
-        <div className="max-w-3xl w-full relative">
-          {/* Image preview */}
-          {attachments.length > 0 && (
-            <div className="flex gap-2 mb-2 flex-wrap">
-              {attachments.map((att) => (
-                <div key={att.id} className="relative group">
-                  <img
-                    src={att.previewUrl}
-                    alt={att.name}
-                    className="w-16 h-16 object-cover rounded-lg border border-border"
-                  />
-                  <button
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onPaste={handlePaste}
-            onBlur={() => setTimeout(() => setSlashMenuOpen(false), 150)}
-            onKeyDown={(e) => {
-              if (slashMenuOpen) return;
-              if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Message... (type / for commands, Shift+Enter for new line)"
-            className="w-full py-3.5 pl-[42px] pr-[52px] rounded-3xl border border-input text-[15px] resize-none outline-none leading-relaxed min-h-[48px] max-h-[160px] overflow-hidden shadow-sm transition-[border-color,box-shadow] focus:border-primary focus:shadow-[0_2px_12px_rgba(25,118,210,0.12)] disabled:bg-muted/50 disabled:opacity-70 placeholder:text-muted-foreground/50"
-          />
-
-          {slashMenuOpen && (
-            <SlashCommandMenu
-              commands={slashCommands}
-              filter={slashFilter}
-              position={slashMenuPosition}
-              onSelect={handleSlashSelect}
-              onClose={() => setSlashMenuOpen(false)}
-            />
-          )}
-
-          {/* Attach button */}
-          <button
-            className="absolute left-2 top-[calc(50%-4px)] -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={streaming}
-            title="Attach image"
-          >
-            <Paperclip size={18} />
-          </button>
-
-          {streaming && (
-            <button
-              className="absolute right-12 top-[calc(50%-4px)] -translate-y-1/2 w-9 h-9 rounded-full bg-background border border-destructive text-destructive flex items-center justify-center cursor-pointer transition-colors hover:bg-destructive/10"
-              onClick={handleStop}
-              title="Stop"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            </button>
-          )}
-          <button
-            className={`absolute right-2 top-[calc(50%-4px)] -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-              !canSend
-                ? "bg-muted text-muted-foreground cursor-default"
-                : "bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90 active:scale-95"
-            }`}
-            onClick={handleSend}
-            disabled={!canSend}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        streaming={streaming}
+        mode={mode}
+        setMode={setMode}
+        attachments={attachments}
+        onRemoveAttachment={removeAttachment}
+        onPaste={handlePaste}
+        onFileSelect={handleFileSelect}
+        fileInputRef={fileInputRef}
+        onSend={handleSend}
+        onStop={handleStop}
+        canSend={canSend}
+        slashMenuOpen={slashMenuOpen}
+        setSlashMenuOpen={setSlashMenuOpen}
+        slashFilter={slashFilter}
+        slashCommands={slashCommands}
+        onSlashInputChange={handleSlashInputChange}
+      />
     </div>
   );
 }
