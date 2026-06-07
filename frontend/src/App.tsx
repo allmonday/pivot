@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Task, Folder } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ChatPanel } from "./components/ChatPanel";
@@ -10,6 +10,7 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { fetchFolders, fetchTasks, fetchPlans } from "./api";
 import { useChatSession } from "./hooks/useChatSession";
 import { useTaskActivity } from "./hooks/useTaskActivity";
+import { useResizable } from "./hooks/useResizable";
 import { LayoutProvider, useLayout } from "./hooks/useLayout";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
@@ -45,6 +46,46 @@ function AppContent() {
   const chatSession = useChatSession();
   const activity = useTaskActivity(selectedTask?.id ?? null);
   const layout = useLayout();
+
+  const fileExplorerVerticalResize = useResizable({
+    direction: "vertical",
+    size: layout.fileExplorerHeight,
+    onSizeChange: layout.setFileExplorerHeight,
+    min: 150,
+    max: 600,
+  });
+
+  const fileExplorerHorizontalResize = useResizable({
+    direction: "horizontal",
+    size: layout.fileExplorerHeight,
+    onSizeChange: layout.setFileExplorerHeight,
+    min: 200,
+    max: useMemo(() => window.innerWidth * 0.8, []),
+  });
+
+  const planResize = useResizable({
+    direction: "horizontal",
+    size: layout.planWidth,
+    onSizeChange: layout.setPlanWidth,
+    min: 250,
+    max: useMemo(() => window.innerWidth * 0.8, []),
+  });
+
+  const historyResize = useResizable({
+    direction: "horizontal",
+    size: layout.historyWidth,
+    onSizeChange: layout.setHistoryWidth,
+    min: 300,
+    max: useMemo(() => window.innerWidth * 0.8, []),
+  });
+
+  const terminalResize = useResizable({
+    direction: "vertical",
+    size: layout.terminalHeight,
+    onSizeChange: layout.setTerminalHeight,
+    min: 150,
+    max: 500,
+  });
 
   const handleFolderSelect = (folder: Folder) => {
     setParamsInUrl(folder.id, null);
@@ -162,41 +203,13 @@ function AppContent() {
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (
                 <ResizeHandle
                   direction="vertical"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const startY = e.clientY;
-                    const startHeight = layout.fileExplorerHeight;
-                    const onMove = (ev: MouseEvent) => {
-                      const delta = startY - ev.clientY;
-                      layout.setFileExplorerHeight(Math.max(150, Math.min(600, startHeight + delta)));
-                    };
-                    const onUp = () => {
-                      document.removeEventListener("mousemove", onMove);
-                      document.removeEventListener("mouseup", onUp);
-                    };
-                    document.addEventListener("mousemove", onMove);
-                    document.addEventListener("mouseup", onUp);
-                  }}
+                  onMouseDown={fileExplorerVerticalResize}
                 />
               )}
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "horizontal" && (
                 <ResizeHandle
                   direction="horizontal"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const startX = e.clientX;
-                    const startWidth = layout.fileExplorerHeight;
-                    const onMove = (ev: MouseEvent) => {
-                      const delta = startX - ev.clientX;
-                      layout.setFileExplorerHeight(Math.max(200, Math.min(window.innerWidth * 0.8, startWidth + delta)));
-                    };
-                    const onUp = () => {
-                      document.removeEventListener("mousemove", onMove);
-                      document.removeEventListener("mouseup", onUp);
-                    };
-                    document.addEventListener("mousemove", onMove);
-                    document.addEventListener("mouseup", onUp);
-                  }}
+                  onMouseDown={fileExplorerHorizontalResize}
                 />
               )}
               <FileExplorerPanel
@@ -211,21 +224,7 @@ function AppContent() {
             {layout.planVisible && (
               <ResizeHandle
                 direction="horizontal"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const startX = e.clientX;
-                  const startWidth = layout.planWidth;
-                  const onMove = (ev: MouseEvent) => {
-                    const delta = startX - ev.clientX;
-                    layout.setPlanWidth(Math.max(250, Math.min(window.innerWidth * 0.8, startWidth + delta)));
-                  };
-                  const onUp = () => {
-                    document.removeEventListener("mousemove", onMove);
-                    document.removeEventListener("mouseup", onUp);
-                  };
-                  document.addEventListener("mousemove", onMove);
-                  document.addEventListener("mouseup", onUp);
-                }}
+                onMouseDown={planResize}
               />
             )}
             <PlanPanel
@@ -239,21 +238,7 @@ function AppContent() {
             {layout.historyVisible && (
               <ResizeHandle
                 direction="horizontal"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const startX = e.clientX;
-                  const startWidth = layout.historyWidth;
-                  const onMove = (ev: MouseEvent) => {
-                    const delta = startX - ev.clientX;
-                    layout.setHistoryWidth(Math.max(300, Math.min(window.innerWidth * 0.8, startWidth + delta)));
-                  };
-                  const onUp = () => {
-                    document.removeEventListener("mousemove", onMove);
-                    document.removeEventListener("mouseup", onUp);
-                  };
-                  document.addEventListener("mousemove", onMove);
-                  document.addEventListener("mouseup", onUp);
-                }}
+                onMouseDown={historyResize}
               />
             )}
             <HistoryPanel
@@ -266,21 +251,7 @@ function AppContent() {
           {layout.terminalVisible && (
             <ResizeHandle
               direction="vertical"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const startY = e.clientY;
-                const startHeight = layout.terminalHeight;
-                const onMove = (ev: MouseEvent) => {
-                  const delta = startY - ev.clientY;
-                  layout.setTerminalHeight(Math.max(150, Math.min(500, startHeight + delta)));
-                };
-                const onUp = () => {
-                  document.removeEventListener("mousemove", onMove);
-                  document.removeEventListener("mouseup", onUp);
-                };
-                document.addEventListener("mousemove", onMove);
-                document.addEventListener("mouseup", onUp);
-              }}
+              onMouseDown={terminalResize}
             />
           )}
           <TerminalPanel
