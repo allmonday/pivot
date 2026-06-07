@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ..database import async_session
+from ..repositories import task_repo
 from ..schemas.models import ChatRequest, SlashCommand
-from ..services import claude_service
 from ..services.client_manager import client_manager
 
 logger = logging.getLogger("cc-sdk")
@@ -117,4 +117,4 @@ async def interrupt(task_id: str):
 
 async def _get_folder_path(task_id: str) -> str | None:
     async with async_session() as db:
-        return await claude_service.get_task_folder_path(db, task_id)
+        return await task_repo.get_folder_path(db, task_id)

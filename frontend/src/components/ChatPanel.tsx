@@ -3,6 +3,7 @@ import type { ChatMessage, ContentBlock, ImageAttachment } from "../types";
 import { sendChat, reconnectStream, checkActiveStream, interruptStream, resolvePermission, fetchCommands } from "../api";
 import type { SlashCommand as SlashCommandType } from "../api";
 import { useStreamEvents } from "../hooks/useStreamEvents";
+import { useLayout } from "../hooks/useLayout";
 import { MessageBubble } from "./MessageBubble";
 import { ResultInfoBar } from "./ResultInfoBar";
 import { SlashCommandMenu, type SlashCommand } from "./SlashCommandMenu";
@@ -15,19 +16,9 @@ interface Props {
   initialMessages: ChatMessage[];
   onSessionIdChange: (id: string) => void;
   onStreamingChange: (streaming: boolean) => void;
-  sidebarVisible: boolean;
-  onToggleSidebar: () => void;
-  planVisible: boolean;
-  onTogglePlan: () => void;
   hasPlan: boolean;
-  historyVisible: boolean;
-  onToggleHistory: () => void;
-  fileExplorerVisible: boolean;
-  onToggleFileExplorer: () => void;
   hasFolder: boolean;
   folderPath: string | null;
-  terminalVisible: boolean;
-  onOpenTerminal: () => void;
 }
 
 const VALID_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -60,7 +51,8 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, sidebarVisible, onToggleSidebar, planVisible, onTogglePlan, hasPlan, historyVisible, onToggleHistory, fileExplorerVisible, onToggleFileExplorer, hasFolder, folderPath, terminalVisible, onOpenTerminal }: Props) {
+export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChange, onStreamingChange, hasPlan, hasFolder, folderPath }: Props) {
+  const layout = useLayout();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
   const [reconnecting, setReconnecting] = useState(false);
@@ -312,17 +304,17 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         <Button
           variant="ghost"
           size="icon"
-          onClick={onToggleSidebar}
+          onClick={layout.toggleSidebar}
           className="h-6 w-6 mr-1"
-          title={sidebarVisible ? "收起侧边栏" : "展开侧边栏"}
+          title={layout.sidebarVisible ? "收起侧边栏" : "展开侧边栏"}
         >
-          {sidebarVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          {layout.sidebarVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
         </Button>
         {hasPlan && (
           <Button
-            variant={planVisible ? "default" : "outline"}
+            variant={layout.planVisible ? "default" : "outline"}
             size="sm"
-            onClick={onTogglePlan}
+            onClick={layout.togglePlan}
             className="h-6 text-xs"
           >
             Plan
@@ -330,9 +322,9 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         )}
         {hasFolder && (
           <Button
-            variant={fileExplorerVisible ? "default" : "outline"}
+            variant={layout.fileExplorerVisible ? "default" : "outline"}
             size="sm"
-            onClick={onToggleFileExplorer}
+            onClick={layout.toggleFileExplorer}
             className="h-6 text-xs"
           >
             Files
@@ -340,9 +332,9 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         )}
         {sessionId && (
           <Button
-            variant={historyVisible ? "default" : "outline"}
+            variant={layout.historyVisible ? "default" : "outline"}
             size="sm"
-            onClick={onToggleHistory}
+            onClick={layout.toggleHistory}
             className="h-6 text-xs"
           >
             History
@@ -350,12 +342,10 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
         )}
         {sessionId && (
           <Button
-            variant={terminalVisible ? "default" : "outline"}
+            variant={layout.terminalVisible ? "default" : "outline"}
             size="sm"
             className="h-6 text-xs"
-            onClick={() => {
-              onOpenTerminal();
-            }}
+            onClick={layout.toggleTerminal}
           >
             Terminal
           </Button>

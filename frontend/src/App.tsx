@@ -10,7 +10,7 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { fetchFolders, fetchTasks, fetchPlans } from "./api";
 import { useChatSession } from "./hooks/useChatSession";
 import { useTaskActivity } from "./hooks/useTaskActivity";
-import { useLayout } from "./hooks/useLayout";
+import { LayoutProvider, useLayout } from "./hooks/useLayout";
 
 function getParamsFromUrl(): { folderId: string | null; taskId: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -30,6 +30,14 @@ function setParamsInUrl(folderId: string | null, taskId: string | null) {
 }
 
 export default function App() {
+  return (
+    <LayoutProvider>
+      <AppContent />
+    </LayoutProvider>
+  );
+}
+
+function AppContent() {
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [planPaths, setPlanPaths] = useState<string[]>([]);
@@ -57,10 +65,6 @@ export default function App() {
     setPlanPaths(plans);
     layout.setPlanVisible(plans.length > 0);
     await chatSession.loadSession(task.id);
-  };
-
-  const handleOpenTerminal = () => {
-    layout.toggleTerminal();
   };
 
   const handleStreamingChange = (taskId: string, streaming: boolean) => {
@@ -150,21 +154,9 @@ export default function App() {
                   initialMessages={chatSession.initialMessages}
                   onSessionIdChange={chatSession.setSessionId}
                   onStreamingChange={(streaming) => handleStreamingChange(selectedTask.id, streaming)}
-                  sidebarVisible={layout.sidebarVisible}
-                  onToggleSidebar={layout.toggleSidebar}
-                  planVisible={layout.planVisible}
-                  onTogglePlan={layout.togglePlan}
                   hasPlan={planPaths.length > 0}
-                  historyVisible={layout.historyVisible}
-                  onToggleHistory={layout.toggleHistory}
-                  fileExplorerVisible={layout.fileExplorerVisible}
-                  onToggleFileExplorer={layout.toggleFileExplorer}
-                  fileExplorerLayout={layout.fileExplorerLayout}
-                  onToggleFileExplorerLayout={layout.toggleFileExplorerLayout}
                   hasFolder={!!selectedFolder}
                   folderPath={selectedFolder?.folder_path ?? null}
-                  terminalVisible={layout.terminalVisible}
-                  onOpenTerminal={handleOpenTerminal}
                 />
               </div>
               {layout.fileExplorerVisible && layout.fileExplorerLayout === "vertical" && (

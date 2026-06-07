@@ -1,8 +1,41 @@
-import { useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 export type FileExplorerLayout = "horizontal" | "vertical";
 
-export function useLayout() {
+export interface LayoutState {
+  sidebarVisible: boolean;
+  toggleSidebar: () => void;
+  planVisible: boolean;
+  setPlanVisible: (v: boolean) => void;
+  planWidth: number;
+  setPlanWidth: (v: number) => void;
+  togglePlan: () => void;
+  closePlan: () => void;
+  historyVisible: boolean;
+  setHistoryVisible: (v: boolean) => void;
+  historyWidth: number;
+  setHistoryWidth: (v: number) => void;
+  toggleHistory: () => void;
+  closeHistory: () => void;
+  fileExplorerVisible: boolean;
+  setFileExplorerVisible: (v: boolean) => void;
+  fileExplorerHeight: number;
+  setFileExplorerHeight: (v: number) => void;
+  fileExplorerLayout: FileExplorerLayout;
+  toggleFileExplorerLayout: () => void;
+  toggleFileExplorer: () => void;
+  closeFileExplorer: () => void;
+  terminalVisible: boolean;
+  setTerminalVisible: (v: boolean) => void;
+  terminalHeight: number;
+  setTerminalHeight: (v: number) => void;
+  toggleTerminal: () => void;
+  closeTerminal: () => void;
+}
+
+const LayoutContext = createContext<LayoutState | null>(null);
+
+export function LayoutProvider({ children }: { children: ReactNode }) {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [planVisible, setPlanVisible] = useState(false);
   const [planWidth, setPlanWidth] = useState(400);
@@ -26,7 +59,7 @@ export function useLayout() {
   const toggleTerminal = () => setTerminalVisible((v) => !v);
   const closeTerminal = () => setTerminalVisible(false);
 
-  return {
+  const value: LayoutState = {
     sidebarVisible,
     toggleSidebar,
     planVisible,
@@ -56,4 +89,12 @@ export function useLayout() {
     toggleTerminal,
     closeTerminal,
   };
+
+  return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>;
+}
+
+export function useLayout(): LayoutState {
+  const ctx = useContext(LayoutContext);
+  if (!ctx) throw new Error("useLayout must be used within LayoutProvider");
+  return ctx;
 }

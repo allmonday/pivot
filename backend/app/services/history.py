@@ -1,13 +1,8 @@
-from typing import Optional
-
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from claude_agent_sdk import get_session_messages
 
-from ..models import SessionORM, TaskORM
-from ..schemas.models import Task
+from ..repositories import session_repo, task_repo
 from .serializers import serialize_raw_content
 
 
@@ -196,13 +191,11 @@ def _merge_blocks_to_messages(blocks: list[dict]) -> list[dict]:
 
 
 async def get_history(db: AsyncSession, task_id: str) -> list[dict]:
-    from .claude_service import get_session_id, get_task_folder_path
-
-    session_id = await get_session_id(db, task_id)
+    session_id = await session_repo.get_session_id(db, task_id)
     if not session_id:
         return []
 
-    directory = await get_task_folder_path(db, task_id)
+    directory = await task_repo.get_folder_path(db, task_id)
 
     try:
         raw_messages = get_session_messages(session_id, directory=directory)
@@ -257,13 +250,11 @@ async def get_full_history(db: AsyncSession, task_id: str) -> list[dict]:
         _read_session_file,
     )
 
-    from .claude_service import get_session_id, get_task_folder_path
-
-    session_id = await get_session_id(db, task_id)
+    session_id = await session_repo.get_session_id(db, task_id)
     if not session_id:
         return []
 
-    directory = await get_task_folder_path(db, task_id)
+    directory = await task_repo.get_folder_path(db, task_id)
 
     try:
         content = _read_session_file(session_id, directory)
