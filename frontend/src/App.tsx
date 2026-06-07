@@ -79,6 +79,19 @@ export default function App() {
     }
   };
 
+  // Handle notification click navigation
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { taskId } = (e as CustomEvent).detail;
+      fetchTasks().then((tasks) => {
+        const task = tasks.find((t) => t.id === taskId);
+        if (task) handleTaskSelect(task);
+      });
+    };
+    window.addEventListener("notification-navigate", handler);
+    return () => window.removeEventListener("notification-navigate", handler);
+  });
+
   // Restore state from URL params on mount
   useEffect(() => {
     const { folderId, taskId } = getParamsFromUrl();

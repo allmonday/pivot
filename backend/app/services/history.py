@@ -20,23 +20,21 @@ def _is_visible_entry(entry: dict) -> bool:
     return True
 
 
-def _build_full_chain(entries: list[dict]) -> list[dict]:
-    """Build conversation chain, expanding compact summaries into original messages."""
+def _find_main_chain(
+    entries: list[dict],
+    by_uuid: dict[str, dict],
+    entry_index: dict[str, int],
+) -> list[dict]:
+    """Find the main conversation chain by tracing from the last user/assistant
+    leaf back to the root. Only considers parent-child links within *entries*."""
     if not entries:
         return []
 
-    by_uuid: dict[str, dict] = {}
-    for entry in entries:
-        by_uuid[entry["uuid"]] = entry
-
-    entry_index: dict[str, int] = {}
-    for i, entry in enumerate(entries):
-        entry_index[entry["uuid"]] = i
-
+    subset_uuids = {e["uuid"] for e in entries}
     parent_uuids: set[str] = set()
     for entry in entries:
         p = entry.get("parentUuid")
-        if p:
+        if p and p in subset_uuids:
             parent_uuids.add(p)
     terminals = [e for e in entries if e["uuid"] not in parent_uuids]
 
@@ -58,7 +56,11 @@ def _build_full_chain(entries: list[dict]) -> list[dict]:
     if not leaves:
         return []
 
-    main_leaves = [l for l in leaves if not l.get("isSidechain") and not l.get("teamName") and not l.get("isMeta")]
+    main_leaves = [
+        l
+        for l in leaves
+        if not l.get("isSidechain") and not l.get("teamName") and not l.get("isMeta")
+    ]
     pool = main_leaves or leaves
     leaf = max(pool, key=lambda e: entry_index.get(e["uuid"], -1))
 
@@ -75,29 +77,75 @@ def _build_full_chain(entries: list[dict]) -> list[dict]:
         cur = by_uuid.get(p) if p else None
 
     chain.reverse()
+    return chain
+
+
+def _build_full_chain(entries: list[dict]) -> list[dict]:
+    """Build conversation chain, expanding compact summaries into original messages."""
+    if not entries:
+        return []
+
+    by_uuid: dict[str, dict] = {}
+    for entry in entries:
+        by_uuid[entry["uuid"]] = entry
+
+    entry_index: dict[str, int] = {}
+    for i, entry in enumerate(entries):
+        entry_index[entry["uuid"]] = i
+
+    chain = _find_main_chain(entries, by_uuid, entry_index)
 
     result: list[dict] = []
     for entry in chain:
         if entry.get("isCompactSummary"):
-            logical_parent = entry.get("logicalParentUuid")
-            if logical_parent and logical_parent in by_uuid:
-                pre_chain: list[dict] = []
-                pre_seen: set[str] = set()
-                pre_cur = by_uuid[logical_parent]
-                while pre_cur is not None:
-                    uid = pre_cur["uuid"]
-                    if uid in pre_seen:
-                        break
-                    pre_seen.add(uid)
-                    if _is_visible_entry(pre_cur) and not pre_cur.get("isCompactSummary"):
-                        pre_chain.append(pre_cur)
-                    p = pre_cur.get("parentUuid")
-                    pre_cur = by_uuid.get(p) if p else None
-                result.extend(reversed(pre_chain))
+            _expand_compact(entry, entries, by_uuid, entry_index, result)
         else:
             result.append(entry)
 
     return result
+
+
+def _expand_compact(
+    entry: dict,
+    all_entries: list[dict],
+    by_uuid: dict[str, dict],
+    entry_index: dict[str, int],
+    result: list[dict],
+) -> None:
+    """Expand a compact summary, appending recovered original messages to *result*."""
+    logical_parent = entry.get("logicalParentUuid")
+    if logical_parent and logical_parent in by_uuid:
+        pre_chain: list[dict] = []
+        pre_seen: set[str] = set()
+        pre_cur = by_uuid[logical_parent]
+        while pre_cur is not None:
+            uid = pre_cur["uuid"]
+            if uid in pre_seen:
+                break
+            pre_seen.add(uid)
+            if _is_visible_entry(pre_cur) and not pre_cur.get("isCompactSummary"):
+                pre_chain.append(pre_cur)
+            p = pre_cur.get("parentUuid")
+            pre_cur = by_uuid.get(p) if p else None
+        result.extend(reversed(pre_chain))
+        return
+
+    # No logicalParentUuid — the compact's parent is a system entry that marks
+    # the boundary between pre-compact and post-compact conversation.
+    parent_uuid = entry.get("parentUuid")
+    boundary_idx = entry_index.get(parent_uuid) if parent_uuid else None
+    if boundary_idx is None:
+        boundary_idx = entry_index.get(entry["uuid"], -1)
+
+    if boundary_idx <= 0:
+        return
+
+    # Include ALL visible entries in chronological order.  Tool-use creates
+    # multiple branches at fork points; _find_main_chain only follows one.
+    # For full-history we want the complete picture.
+    for e in all_entries[:boundary_idx]:
+        if _is_visible_entry(e) and not e.get("isCompactSummary"):
+            result.append(e)
 
 
 def _entries_to_messages(chain: list[dict]) -> list[dict]:

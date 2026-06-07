@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from .config import settings
@@ -15,16 +14,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """建表"""
-    from .models import Base
+    """Run Alembic migrations to create/update schema."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # Drop legacy plan_paths column if exists
-        result = await conn.execute(text("PRAGMA table_info(tasks)"))
-        columns = [row[1] for row in result]
-        if "plan_paths" in columns:
-            await conn.execute(text("ALTER TABLE tasks DROP COLUMN plan_paths"))
-        # Add summary column if missing
-        if "summary" not in columns:
-            await conn.execute(text("ALTER TABLE tasks ADD COLUMN summary TEXT"))
+    from alembic.command import upgrade
+    from alembic.config import Config
+
+    alembic_cfg = Config("alembic.ini")
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(ThreadPoolExecutor(1), upgrade, alembic_cfg, "head")
