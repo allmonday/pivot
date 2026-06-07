@@ -13,6 +13,7 @@ interface Props {
   streaming: boolean;
   mode: "plan" | "code";
   setMode: (m: "plan" | "code") => void;
+  fullWidth: boolean;
   attachments: ImageAttachment[];
   onRemoveAttachment: (id: string) => void;
   onPaste: (e: React.ClipboardEvent) => void;
@@ -34,6 +35,7 @@ export function ChatInput({
   streaming,
   mode,
   setMode,
+  fullWidth,
   attachments,
   onRemoveAttachment,
   onPaste,
@@ -94,7 +96,7 @@ export function ChatInput({
           Code
         </button>
       </div>
-      <div className="max-w-3xl w-full relative">
+      <div className={`${fullWidth ? "max-w-6xl" : "max-w-3xl"} w-full relative`}>
         {attachments.length > 0 && (
           <div className="flex gap-2 mb-2 flex-wrap">
             {attachments.map((att) => (

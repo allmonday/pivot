@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ContentBlock } from "../types";
-import { sendChat, reconnectStream, checkActiveStream, interruptStream } from "../api";
-import { useStreamEvents } from "../hooks/useStreamEvents";
+import type { ChatMessage } from "../types";
+import { useStreamConnection } from "../hooks/useStreamConnection";
 import { useImageAttachments } from "../hooks/useImageAttachments";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import { useLayout } from "../hooks/useLayout";
@@ -10,7 +9,7 @@ import { ResultInfoBar } from "./ResultInfoBar";
 import { PermissionRequestDialog } from "./PermissionRequestDialog";
 import { ChatInput } from "./ChatInput";
 import { Button } from "@/components/ui/button";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Maximize2, Minimize2 } from "lucide-react";
 
 interface Props {
   taskId: string;
@@ -28,29 +27,17 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
   const layout = useLayout();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"plan" | "code">("code");
-  const [reconnecting, setReconnecting] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const [fullWidth, setFullWidth] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const activeTaskIdRef = useRef(taskId);
-  activeTaskIdRef.current = taskId;
-  const reconnectingTaskRef = useRef<string | null>(null);
-  // Monotonically increasing epoch — incremented on every stream reset so
-  // stale SSE callbacks (from the same task but a previous stream) are dropped.
-  const streamEpochRef = useRef(0);
 
-  const {
-    messages,
-    setMessages,
-    streamContent,
-    streaming,
-    setStreaming,
-    resultInfo,
-    pendingPermission,
-    setPendingPermission,
-    accumulatedRef,
-    handleEvent,
-    resetStreamState,
-  } = useStreamEvents();
+  const conn = useStreamConnection({
+    taskId,
+    sessionId,
+    initialMessages,
+    mode,
+    onSessionIdChange,
+    onStreamingChange,
+  });
 
   const {
     attachments,
@@ -69,166 +56,30 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
     handleInputChange: handleSlashInputChange,
   } = useSlashCommands();
 
-  // Sync initialMessages into the hook
-  useEffect(() => {
-    if (reconnectingTaskRef.current === taskId) {
-      return;
-    }
-    abortRef.current?.abort();
-    abortRef.current = null;
-    streamEpochRef.current += 1;
-    resetStreamState();
-    setMessages(initialMessages);
-  }, [initialMessages, taskId]);
-
-  // Reconnect to active stream on taskId change
-  useEffect(() => {
-    const currentTaskId = taskId;
-    abortRef.current?.abort();
-    abortRef.current = null;
-    reconnectingTaskRef.current = null;
-
-    let cancelled = false;
-    checkActiveStream(taskId).then((res) => {
-      if (cancelled) return;
-      if (res.active) {
-        reconnectingTaskRef.current = currentTaskId;
-        streamEpochRef.current += 1;
-        const epoch = streamEpochRef.current;
-        setReconnecting(true);
-        setStreaming(true);
-        onStreamingChange(true);
-        resetStreamState();
-        setStreaming(true);
-
-        const guard = <T extends unknown[]>(fn: (...args: T) => void) =>
-          (...args: T) => {
-            if (streamEpochRef.current !== epoch) return;
-            if (activeTaskIdRef.current !== currentTaskId) return;
-            fn(...args);
-          };
-
-        abortRef.current = reconnectStream(
-          taskId,
-          guard(handleEvent),
-          guard((err: Error) => {
-            console.error("Reconnect error:", err);
-            reconnectingTaskRef.current = null;
-            setStreaming(false);
-            setReconnecting(false);
-            onStreamingChange(false);
-          }),
-          guard(() => {
-            reconnectingTaskRef.current = null;
-            setStreaming(false);
-            setReconnecting(false);
-            onStreamingChange(false);
-          })
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-      reconnectingTaskRef.current = null;
-      abortRef.current?.abort();
-      abortRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [messages, streamContent]);
+  }, [conn.messages, conn.streamContent]);
 
-  const doSend = (text: string, images?: typeof attachments) => {
-    const sendTaskId = taskId;
-    const content: ContentBlock[] = [];
-    if (text.trim()) {
-      content.push({ kind: "text", text });
-    }
-    for (const img of images ?? []) {
-      content.push({
-        kind: "image",
-        source: { type: "base64", media_type: img.mediaType, data: img.base64 },
-        text: img.name,
-      });
-    }
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content };
-    setMessages((prev) => [...prev, userMsg]);
-
-    // Abort any previous stream and bump epoch so stale callbacks are ignored
-    abortRef.current?.abort();
-    abortRef.current = null;
-    streamEpochRef.current += 1;
-    const epoch = streamEpochRef.current;
-
-    resetStreamState();
-    setStreaming(true);
-    onStreamingChange(true);
-
-    const onEvent = (eventType: string, data: Record<string, unknown>) => {
-      if (streamEpochRef.current !== epoch) return;
-      if (activeTaskIdRef.current !== sendTaskId) return;
-      if (eventType === "result" && data.session_id) {
-        onSessionIdChange(data.session_id as string);
-      }
-      handleEvent(eventType, data);
-    };
-
-    abortRef.current = sendChat(
-      taskId,
-      text,
-      sessionId,
-      mode,
-      onEvent,
-      (err) => {
-        if (streamEpochRef.current !== epoch) return;
-        if (activeTaskIdRef.current !== sendTaskId) return;
-        console.error(err);
-        setStreaming(false);
-        onStreamingChange(false);
-      },
-      () => {
-        if (streamEpochRef.current !== epoch) return;
-        if (activeTaskIdRef.current !== sendTaskId) return;
-        setStreaming(false);
-        onStreamingChange(false);
-      },
-      images
-    );
-  };
-
-  const doSendRef = useRef(doSend);
-  doSendRef.current = doSend;
+  const sendRef = useRef(conn.send);
+  sendRef.current = conn.send;
 
   const handleSelectOption = useCallback((text: string) => {
-    doSendRef.current(text);
+    sendRef.current(text);
   }, []);
 
-  const stableOnSelectOption = !streaming ? handleSelectOption : undefined;
+  const stableOnSelectOption = !conn.streaming ? handleSelectOption : undefined;
 
   const handleSend = () => {
-    if (streaming) return;
+    if (conn.streaming) return;
     if (!input.trim() && attachments.length === 0) return;
     const text = input;
     const images = [...attachments];
     setInput("");
     clearAttachments();
-    doSend(text, images);
+    conn.send(text, images);
   };
 
-  const handleStop = async () => {
-    await interruptStream(taskId);
-    const final = accumulatedRef.current;
-    if (final.length > 0) {
-      setMessages((msgs) => [...msgs, { id: crypto.randomUUID(), role: "assistant", content: final }]);
-    }
-    accumulatedRef.current = [];
-    resetStreamState();
-    onStreamingChange(false);
-  };
-
-  const canSend = !streaming && (input.trim() || attachments.length > 0);
+  const canSend = !conn.streaming && (input.trim() || attachments.length > 0);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -292,27 +143,36 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
           )}
         </div>
         <div className="flex-1" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => setFullWidth((v) => !v)}
+          title={fullWidth ? "居中模式" : "全宽模式"}
+        >
+          {fullWidth ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        </Button>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="max-w-3xl mx-auto px-6 py-6 pb-4">
-          {messages.map((msg) => (
+        <div className={`${fullWidth ? "max-w-6xl mx-auto" : "max-w-3xl mx-auto"} px-6 py-6 pb-4`}>
+          {conn.messages.map((msg) => (
             <MessageBubble
               key={msg.id}
               message={msg}
               onSelectOption={stableOnSelectOption}
             />
           ))}
-          {streaming && streamContent.length > 0 && (
+          {conn.streaming && conn.streamContent.length > 0 && (
             <MessageBubble
-              message={{ role: "assistant", content: streamContent }}
+              message={{ role: "assistant", content: conn.streamContent }}
               isStreaming
             />
           )}
-          {streaming && streamContent.length === 0 && (
+          {conn.streaming && conn.streamContent.length === 0 && (
             <div className="flex gap-1.5 pl-[46px] py-2 items-center">
-              {reconnecting && (
+              {conn.reconnecting && (
                 <span className="text-xs text-muted-foreground mr-2">Reconnecting...</span>
               )}
               <div className="w-[7px] h-[7px] rounded-full bg-muted-foreground/60" style={{ animation: "chatBounce 1.4s infinite ease-in-out" }} />
@@ -320,14 +180,14 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
               <div className="w-[7px] h-[7px] rounded-full bg-muted-foreground/60" style={{ animation: "chatBounce 1.4s infinite ease-in-out 0.32s" }} />
             </div>
           )}
-          {streaming && pendingPermission && (
+          {conn.streaming && conn.pendingPermission && (
             <PermissionRequestDialog
               taskId={taskId}
-              permission={pendingPermission}
-              onDismiss={() => setPendingPermission(null)}
+              permission={conn.pendingPermission}
+              onDismiss={() => conn.setPendingPermission(null)}
             />
           )}
-          {!streaming && resultInfo && <ResultInfoBar info={resultInfo} />}
+          {!conn.streaming && conn.resultInfo && <ResultInfoBar info={conn.resultInfo} />}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -336,16 +196,17 @@ export function ChatPanel({ taskId, sessionId, initialMessages, onSessionIdChang
       <ChatInput
         input={input}
         setInput={setInput}
-        streaming={streaming}
+        streaming={conn.streaming}
         mode={mode}
         setMode={setMode}
+        fullWidth={fullWidth}
         attachments={attachments}
         onRemoveAttachment={removeAttachment}
         onPaste={handlePaste}
         onFileSelect={handleFileSelect}
         fileInputRef={fileInputRef}
         onSend={handleSend}
-        onStop={handleStop}
+        onStop={conn.stop}
         canSend={canSend}
         slashMenuOpen={slashMenuOpen}
         setSlashMenuOpen={setSlashMenuOpen}
