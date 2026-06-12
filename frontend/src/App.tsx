@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task, Folder } from "./types";
 import {
   SIDEBAR_WIDTH,
@@ -14,7 +14,7 @@ import { TerminalPanel } from "./components/TerminalPanel";
 import { ResizeHandle } from "./components/ui/resize-handle";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
-import { fetchFolders, fetchTasks, fetchPlans } from "./api";
+import { fetchFolders, fetchTasks, fetchPlanFiles } from "./api";
 import { useChatSession } from "./hooks/useChatSession";
 import { useTaskActivity } from "./hooks/useTaskActivity";
 import { useResizable } from "./hooks/useResizable";
@@ -49,6 +49,8 @@ function AppContent() {
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [planPaths, setPlanPaths] = useState<string[]>([]);
+  const planPathsRef = useRef(planPaths);
+  planPathsRef.current = planPaths;
 
   const chatSession = useChatSession();
   const activity = useTaskActivity(selectedTask?.id ?? null);
@@ -109,9 +111,15 @@ function AppContent() {
     setParamsInUrl(task.folder_id, task.id);
     activity.clearDone(task.id);
     setSelectedTask(task);
-    const plans = await fetchPlans(task.id);
-    setPlanPaths(plans);
-    layout.setPlanVisible(plans.length > 0);
+    const folder = selectedFolder ?? folders.find((f) => f.id === task.folder_id);
+    if (folder?.folder_path) {
+      const plans = await fetchPlanFiles(folder.folder_path);
+      setPlanPaths(plans.map((p) => p.path));
+      layout.setPlanVisible(plans.length > 0);
+    } else {
+      setPlanPaths([]);
+      layout.setPlanVisible(false);
+    }
     await chatSession.loadSession(task.id);
   };
 
@@ -120,10 +128,11 @@ function AppContent() {
       activity.markWorking(taskId, selectedTask?.name);
     } else {
       activity.markDone(taskId);
-      if (selectedTask) {
-        fetchPlans(taskId).then((plans) => {
-          if (plans.length > planPaths.length) {
-            setPlanPaths(plans);
+      const folderPath = selectedFolder?.folder_path;
+      if (folderPath) {
+        fetchPlanFiles(folderPath).then((plans) => {
+          if (plans.length > planPathsRef.current.length) {
+            setPlanPaths(plans.map((p) => p.path));
             layout.setPlanVisible(true);
           }
         });
@@ -150,22 +159,25 @@ function AppContent() {
     if (!folderId && !taskId) return;
 
     Promise.all([fetchFolders(), fetchTasks()]).then(([folders, tasks]) => {
+      let folder: Folder | undefined;
       if (folderId) {
-        const folder = folders.find((f) => f.id === folderId);
+        folder = folders.find((f) => f.id === folderId);
         if (folder) setSelectedFolder(folder);
       }
       if (taskId) {
         const task = tasks.find((t) => t.id === taskId);
         if (task) {
           if (!folderId) {
-            const folder = folders.find((f) => f.id === task.folder_id);
+            folder = folders.find((f) => f.id === task.folder_id);
             if (folder) setSelectedFolder(folder);
           }
           setSelectedTask(task);
-          fetchPlans(task.id).then((plans) => {
-            setPlanPaths(plans);
-            layout.setPlanVisible(plans.length > 0);
-          });
+          if (folder?.folder_path) {
+            fetchPlanFiles(folder.folder_path).then((plans) => {
+              setPlanPaths(plans.map((p) => p.path));
+              layout.setPlanVisible(plans.length > 0);
+            });
+          }
           chatSession.loadSession(task.id);
         }
       }

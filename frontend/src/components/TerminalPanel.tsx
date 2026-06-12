@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { X } from "lucide-react";
 
-const WS_BASE = "ws://localhost:8000/api/ws/terminal";
+const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/ws/terminal`;
 
 interface Props {
   taskId: string;

@@ -1,6 +1,6 @@
 import type { Folder, FolderCreate, Task, TaskCreate, TaskUpdate, ChatMessage, PlanFile, ImageAttachment } from "./types";
 
-const BASE = "http://localhost:8000/api";
+const BASE = "/api";
 
 // Folder APIs
 
